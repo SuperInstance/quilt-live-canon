@@ -284,6 +284,21 @@ const CANON = {
     f_number: 143, phase: 258, date: "2026-09-03",
     ref_papers: [], ref_f_numbers: [140, 141, 142],
   },
+  454: {
+    number: 454, title: "F144 — The Co-Captain in 5 Substrates: A Polyformalism Atlas",
+    f_number: 144, phase: 259, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [141, 143],
+  },
+  455: {
+    number: 455, title: "F145 — Bottle-Router → Cell-Router: Lifting A2A Bottles into Quilt Cells",
+    f_number: 145, phase: 259, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [141, 144],
+  },
+  456: {
+    number: 456, title: "F146 — Real MediaPipe Hands in the Back-Deck Game: From Simulator to Production",
+    f_number: 146, phase: 259, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [142, 143],
+  },
 };
 
 // ===== Request handler =====
