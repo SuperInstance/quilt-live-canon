@@ -1,0 +1,22 @@
+{
+    "name": "superinstance/live-canon",
+    "description": "Live Canon — read the AI-Writings canon as a navigable cell fabric, with 5 novel operations: NAVIGATE, CONFLUENCE, LINEAGE, GHOST, TICK.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=7.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Superinstance\\LiveCanon\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Casey Digennaro",
+            "email": "superinstance@users.noreply.github.com"
+        }
+    ],
+    "homepage": "https://live-canon.superinstance.dev",
+    "keywords": ["quilt", "cell-fabric", "polyformalism", "shape-rag", "ai-writings"]
+}
