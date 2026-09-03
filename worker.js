@@ -299,6 +299,21 @@ const CANON = {
     f_number: 146, phase: 259, date: "2026-09-03",
     ref_papers: [], ref_f_numbers: [142, 143],
   },
+  457: {
+    number: 457, title: "F150 — Tetris + F140: The Audit Game",
+    f_number: 150, phase: 260, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [140, 141, 142, 151],
+  },
+  458: {
+    number: 458, title: "F151 — The Wheelhouse Game: Weather Routing as an F140 Audit",
+    f_number: 151, phase: 260, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [140, 141, 142, 150],
+  },
+  459: {
+    number: 459, title: "F149 — Quilt for the Crew: A Non-Technical Handbook",
+    f_number: 149, phase: 260, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [140, 141, 142, 143, 144, 145, 146, 150, 151],
+  },
 };
 
 // ===== Request handler =====
