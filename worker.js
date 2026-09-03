@@ -219,6 +219,31 @@ const CANON = {
     f_number: 130, phase: 251, date: "2026-09-03",
     ref_papers: [], ref_f_numbers: [115, 129],
   },
+  441: {
+    number: 441, title: "F131 — The 3-Package Polyformalism: One Cell, Three Registries",
+    f_number: 131, phase: 252, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [115, 130],
+  },
+  442: {
+    number: 442, title: "F132 — Operational Fictions as Concrete System-Prompt Noun-Phrases",
+    f_number: 132, phase: 253, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [],
+  },
+  443: {
+    number: 443, title: "F133 — Operational Fictions as Falsifiable Claims (avg divergence 0.861)",
+    f_number: 133, phase: 254, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [132],
+  },
+  444: {
+    number: 444, title: "F134 — The Quilt Cowboy: Orchestrator Over 12 Cheap Voices",
+    f_number: 134, phase: 254, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [132, 133],
+  },
+  445: {
+    number: 445, title: "F135 — The Wheelhouse Test: Scoring Fictions for 0300-in-a-Gale Tolerability",
+    f_number: 135, phase: 254, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [132, 133],
+  },
 };
 
 // ===== Request handler =====
