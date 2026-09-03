@@ -360,6 +360,22 @@ const CANON = {
     f_number: 114, phase: 236, date: "2026-09-03",
     ref_papers: [], ref_f_numbers: [100, 113, 115, 116, 117],
   },
+  // F152-F154: orchestrated agent-written papers
+  461: {
+    number: 461, title: "F152 — The Co-Captain REST API: From Local to Fleet",
+    f_number: 152, phase: 261, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [141, 144, 145],
+  },
+  462: {
+    number: 462, title: "F153 — The 5-Substrate Echo Test: Polyformalism as a Deployment Substrate",
+    f_number: 153, phase: 261, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [144],
+  },
+  463: {
+    number: 463, title: "F154 — The Cowbell: A Persistent Crew-Member Notification System",
+    f_number: 154, phase: 261, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [141, 142, 149, 151],
+  },
 };
 
 // ===== Request handler =====
