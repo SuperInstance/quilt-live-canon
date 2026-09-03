@@ -269,6 +269,21 @@ const CANON = {
     f_number: 140, phase: 257, date: "2026-09-03",
     ref_papers: [], ref_f_numbers: [129, 133, 137, 138, 139],
   },
+  451: {
+    number: 451, title: "F141 — The Co-Captain: A Symbiotic Digital Twin with a Hand-On / Hands-Off Dial",
+    f_number: 141, phase: 258, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [129, 140, 139],
+  },
+  452: {
+    number: 452, title: "F142 — The Back-Deck Game: Multi-Dimensional Scoring for Industrial Operations",
+    f_number: 142, phase: 258, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [140, 141, 143],
+  },
+  453: {
+    number: 453, title: "F143 — The Mudra-Band Emulator: Webcam-Based Hand Pose for Industrial Training",
+    f_number: 143, phase: 258, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [140, 141, 142],
+  },
 };
 
 // ===== Request handler =====
