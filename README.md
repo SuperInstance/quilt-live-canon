@@ -1,83 +1,148 @@
 # quilt-live-canon
 
-**The Live Canon as a Cloudflare Worker** — production deployment of F129.
+**The Live Canon as a Cloudflare Worker** — production deployment of
+F129 (the Live Canon as a navigable cell fabric).
 
 ## Live URL
 
 🌐 **https://live-canon.superinstance.dev**
 
+## What this is
+
+The AI-Writings seed canon (70+ papers) deployed as a read-only REST API.
+Each paper is one cell. Each citation is one edge. The 5 canon operations
+(navigate, confluence, lineage, ghost, tick) operate on the cell graph.
+The state hash is the contract.
+
+This is a 1-file Cloudflare Worker. No KV, no D1, no R2. The canon is
+bundled in the script so the demo works without external storage.
+
 ## Endpoints
 
-| Path | Method | Description |
-|---|---|---|
-| `/` | GET | HTML demo page |
-| `/api/health` | GET | Health check |
-| `/api/canon` | GET | List all 9 bundled papers |
-| `/api/canon/navigate?paper=N&depth=D` | GET | BFS through citations |
-| `/api/canon/confluence?papers=A,B,C` | GET | Join 2+ papers, suggest synthesis |
-| `/api/canon/lineage?f=N` | GET | Papers that cite F{N} |
-| `/api/canon/ghost?paper=N&k=K` | GET | k nearest neighbors by dial-vector |
-| `/api/canon/tick` | GET | Re-balance the canon |
-| `/api/canon/hash` | GET | State hash of the canon |
+| Path                                  | Method | Description                                      |
+|---------------------------------------|--------|--------------------------------------------------|
+| `/`                                   | GET    | HTML demo page (server-renders all 70 papers)    |
+| `/api/health`                         | GET    | Health check                                     |
+| `/api/canon`                          | GET    | List all 70 papers (with date, refs, f_numbers)  |
+| `/api/canon/navigate?paper=N&depth=D` | GET    | BFS through citations from paper N               |
+| `/api/canon/confluence?papers=A,B,C`  | GET    | Join 2+ papers, suggest synthesis title          |
+| `/api/canon/lineage?f=N`              | GET    | Papers that cite F{N}                            |
+| `/api/canon/ghost?paper=N&k=K`        | GET    | k nearest neighbors by dial-vector cosine sim    |
+| `/api/canon/tick`                     | GET    | Re-balance the canon (returns cell count)        |
+| `/api/canon/hash`                     | GET    | State hash of the canon                          |
+| `/api/agent/manifest`                 | GET    | Layer 1 of the agent priming toolkit             |
+| `/api/agent/tools`                    | GET    | Layer 2 — tool catalog                           |
+| `/api/agent/doctrine`                 | GET    | Layer 3 — full Mechanic Doctrine (F158)           |
+| `/api/agent/context?topic=X`          | GET    | Layer 4 — topic-specific paper list              |
+| `/api/agent/identify`                 | POST   | Returns the right layers for NIL/MAK/RUN         |
+| `/api/agent/jobs`                     | GET    | All 3 job profiles (NIL, MAK, RUN)               |
+| `/api/agent/schema`                   | GET    | JSON Schema for all payloads                     |
+| `/.well-known/agent.json`             | GET    | MCP discovery                                    |
+| `/.well-known/llm-tools.json`         | GET    | Anthropic-compatible tool catalog                |
 
-## Live state (Sep 3 2026)
+## Live state (2026-09-04)
 
 ```json
 {
-  "state_hash": "0xbf27a3631cdee337",
-  "paper_count": 9
+  "state_hash": "0x16244e621bbd6d9c",
+  "paper_count": 70,
+  "f_number_range": "F98 — F168",
+  "phase_range": "Phase 222 — Phase 268"
 }
 ```
 
-The state hash is **byte-exact** with the Python reference implementation.
+## The 5 Operations
 
-## Architecture
+1. **NAVIGATE** — BFS through the citation graph from a paper.
+   ```
+   GET /api/canon/navigate?paper=425&depth=2
+   ```
+   Returns the start paper + 2-hop neighborhood.
 
-- **`worker.js`** (16.9KB) — The Cloudflare Worker
-  - FNV-1a 64-bit hash (UTF-8 byte-exact with Python)
-  - Cell encoding (16 x Q1.15 dials, byte-exact with Python/C/Rust/Verilog/VHDL)
-  - 5 operations: NAVIGATE, CONFLUENCE, LINEAGE, GHOST, TICK
-  - HTML demo page (dark theme, interactive buttons)
-- **`test_substrates.py`** — verify byte-exact state hash across substrates
-- **9 bundled papers** — the polyformalism cascade F115 → F130
+2. **CONFLUENCE** — Join 2+ papers, find shared F-numbers, suggest a synthesis title.
+   ```
+   GET /api/canon/confluence?papers=425,430,432
+   ```
+   Useful for "what paper should I write next that connects these 3?"
 
-## The 9 bundled papers
+3. **LINEAGE** — Trace a concept (F-number) through time.
+   ```
+   GET /api/canon/lineage?f=140
+   ```
+   Returns all papers that cite F140.
 
-| Number | F-number | Phase | Title (truncated) |
-|---|---|---|---|
-| 425 | F115 | 237 | The Logical Routes: VHDL × Verilog × the QUF bit-exactness |
-| 426 | F116 | 238 | The 5+1+1+1+1+1+1+1+1+1+1 Opcodes in 5 Substrates |
-| 427 | F117 | 239 | The 5-Substrate Polyformalism |
-| 428 | F118 | 240 | The Polyformalism in Production |
-| 429 | F119 | 241 | The 6-Substrate Polyformalism: cell-runtime |
-| 432 | F122 | 244 | The Shape Store: 5 Indices on Cloudflare Vectorize |
-| 433 | F123 | 245 | The Composer Agent: 5 Cells, 80 Parameters |
-| 439 | F129 | 251 | The Live Canon: Papers as Cells, Reading as Navigation |
-| 440 | F130 | 251 | The Polyformal Live Canon: One Cell, Five Substrates |
+4. **GHOST** — Find k nearest neighbors by dial-vector cosine similarity.
+   ```
+   GET /api/canon/ghost?paper=425&k=5
+   ```
+   The 16-dial cell encoding makes each paper a point in 16-D space.
+   Cosine similarity is the right metric for "is this related?"
 
-## Related
+5. **TICK** — Re-balance the canon. Returns the cell count.
+   ```
+   GET /api/canon/tick
+   ```
+   A no-op (the canon is read-only) but the operation exists for parity
+   with the cell-runtime's 5-op model.
 
-- **`AI-Writings/paper-439.md`** — F129 (the concept)
-- **`AI-Writings/paper-440.md`** — F130 (the polyformal proof)
-- **`quilt-timesfm/live_canon.py`** — Python reference
-- **`quilt-c/live_canon.c`** — C99 port
-- **`quilt-rust/crates/live-canon/`** — Rust port
-- **`quilt-verilog/rtl/live_canon.v`** — Verilog port
-- **`quf-vhdl/rtl/live_canon.vhdl`** — VHDL port
+## The cell encoding
+
+Each paper maps to a 16-dial cell via `cellToDials(paper)`:
+
+```
+dial 0:  paper_number * 131                (e.g. 425 → 55675)
+dial 1:  title_hash_lo (low 16 bits)       (FNV-1a of title)
+dial 2:  f_number * 218
+dial 3:  phase * 218
+dial 4:  (year - 1970) * 546
+dial 5:  n_refs * 256 (capped at 0x7FFF)
+dial 6:  title_hash_hi (bits 16-31)
+dials 7-15: 0 (reserved)
+```
+
+This is byte-exact across Python, JS, C, Rust, Verilog, and VHDL (F110, F144).
+The state hash is FNV-1a 64 over the sorted concatenation of all dials.
 
 ## Deployment
 
+The Worker is deployed via the Cloudflare Workers PUT API. No wrangler needed.
+
 ```bash
-# Deploy to Cloudflare
+ACCT="049ff5e84ecf636b53b162cbb580aae6"
+TOKEN="cfut_..."
 curl -X PUT \
-  -H "Authorization: Bearer $CLOUDFLARE_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/${ACCT}/workers/scripts/live-canon" \
+  -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/javascript" \
-  --data-binary @worker.js \
-  "https://api.cloudflare.com/client/v4/accounts/049ff5e84ecf636b53b162cbb580aae6/workers/scripts/live-canon"
+  --data-binary @worker.js
 ```
 
-The route `live-canon.superinstance.dev/*` maps to this worker.
+The custom domain `live-canon.superinstance.dev` is wired to this worker
+via a Cloudflare route.
 
-## Phase 251 of the polyformalism canon.
+## Audit history
 
-The chart grows because the cowboy rides. The Concept lives because the cell survives portability. The 6 substrates speak the same language. The cowboy rides the deployed canon.
+- **2026-09-03**: 52 papers, state hash 0x89741eb67ca6f055
+- **2026-09-04**: 70 papers (added F167, F168, and 16 lifted gaps), state hash 0x16244e621bbd6d9c
+
+The 18 added papers all exist in the AI-Writings seed canon; they were
+simply not wired into the live canon. The 16 lifted gaps are papers 411-422
+(predate the F-numbering convention), 430-438 (F120-F128), and 460 (F148).
+Their phases were inferred from the surrounding papers; their refs were
+scraped from the paper bodies.
+
+## Polyformalism
+
+The cell graph is byte-exact across 6 substrates (Python, JS, C, Rust,
+Verilog, VHDL). This is the F110 claim. The state hash 0x16244e621bbd6d9c
+is the contract. If two substrates produce different hashes for the same
+canon, one of them is wrong.
+
+## See also
+
+- The Mechanic Doctrine: `GET /api/agent/doctrine` (F158, paper-467)
+- The Working Animal Doctrine: `GET /api/canon/lineage?f=160` (F160, paper-469)
+- The PLATO Room Protocol: `GET /api/canon/lineage?f=162` (F162, paper-471)
+- Conservation Laws as Fences: `GET /api/canon/lineage?f=161` (F161, paper-470)
+
+🌐 The cell is the unit. The hash is the address. The cowboy rides.
