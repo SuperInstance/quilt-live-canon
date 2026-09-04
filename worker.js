@@ -431,6 +431,11 @@ const CANON = {
     f_number: 165, phase: 268, date: "2026-09-04",
     ref_papers: [], ref_f_numbers: [158, 159, 160, 161, 162],
   },
+  475: {
+    number: 475, title: "F166 — The Mudra Vessel Bridge: Neural Input for Commercial Fishing",
+    f_number: 166, phase: 268, date: "2026-09-04",
+    ref_papers: [], ref_f_numbers: [158, 159, 163, 164],
+  },
 };
 
 // ===== Request handler =====
