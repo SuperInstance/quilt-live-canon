@@ -1256,10 +1256,10 @@ const AGENT_MANIFEST = {
   "size_bytes": 612,
   "intent": "First-contact payload. Tell the agent what this place is in 1 paragraph + 1 short list of things to do and not do.",
 
-  "what_this_is": "A 71-paper canon (Quilt cellular-architecture framework) deployed as a read-only API. The hash 0x7f563ed9982496a1 is the contract. You are an LLM/agent who just landed. Pick a job (NIL/MAK/RUN) at /api/agent/identify, and the system will hand you the right layers.",
+  "what_this_is": "A 72-paper canon (Quilt cellular-architecture framework) deployed as a read-only API. The hash 0xc4137cf95fb20135 is the contract. You are an LLM/agent who just landed. Pick a job (NIL/MAK/RUN) at /api/agent/identify, and the system will hand you the right layers.",
 
   "what_you_can_do": [
-    "Read 71 papers, trace citation graphs, find lineage of concepts (F-numbers)",
+    "Read 72 papers, trace citation graphs, find lineage of concepts (F-numbers)",
     "CLAIM a topic and get the most-authoritative paper + body excerpt (F169)",
     "DRILL a topic and get a 3-paper training curriculum (DOCTRINE/IMPLEMENTATION/VERIFICATION)",
     "Get the tool catalog at /api/agent/tools (9 tools, all read-only)",
