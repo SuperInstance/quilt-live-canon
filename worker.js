@@ -426,6 +426,11 @@ const CANON = {
     f_number: 164, phase: 267, date: "2026-09-04",
     ref_papers: [], ref_f_numbers: [160, 161, 162, 163],
   },
+  474: {
+    number: 474, title: "F165 — The Agent Priming Toolkit: 4 Layers, 3 Jobs, 1 Contract",
+    f_number: 165, phase: 268, date: "2026-09-04",
+    ref_papers: [], ref_f_numbers: [158, 159, 160, 161, 162],
+  },
 };
 
 // ===== Request handler =====
@@ -532,6 +537,55 @@ async function routeRequest(request) {
         "Cache-Control": "public, max-age=300",
       },
     });
+  }
+
+  // Agent priming toolkit — the 4-layer progressive-disclosure system
+  if (path === "/api/agent/manifest" || path === "/.well-known/agent-manifest.json") {
+    return jsonResponse(AGENT_MANIFEST, 200, 300);
+  }
+  if (path === "/api/agent/tools" || path === "/.well-known/agent-tools.json") {
+    return jsonResponse(AGENT_TOOLS_PAYLOAD, 200, 300);
+  }
+  if (path === "/api/agent/doctrine" || path === "/.well-known/agent-doctrine.json") {
+    return new Response(AGENT_DOCTRINE_PAYLOAD, {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "public, max-age=300",
+      },
+    });
+  }
+  if (path === "/api/agent/schema" || path === "/.well-known/agent-schema.json") {
+    return jsonResponse(AGENT_SCHEMA, 200, 600);
+  }
+  if (path === "/api/agent/jobs/NIL" || path === "/api/agent/jobs/MAK" || path === "/api/agent/jobs/RUN") {
+    const job = path.split("/").pop();
+    return jsonResponse(JOB_PROFILES[job], 200, 600);
+  }
+  if (path === "/api/agent/jobs") {
+    return jsonResponse({
+      schema: "https://live-canon.superinstance.dev/api/agent/schema",
+      version: "1.0.0",
+      jobs: ["NIL", "MAK", "RUN"],
+      urls: {
+        NIL: "https://live-canon.superinstance.dev/api/agent/jobs/NIL",
+        MAK: "https://live-canon.superinstance.dev/api/agent/jobs/MAK",
+        RUN: "https://live-canon.superinstance.dev/api/agent/jobs/RUN"
+      }
+    }, 200, 600);
+  }
+  if (path === "/api/agent/context") {
+    const topic = (url.searchParams.get("topic") || "doctrine").toLowerCase();
+    return jsonResponse({
+      schema: "https://live-canon.superinstance.dev/api/agent/schema",
+      version: "1.0.0",
+      name: "context",
+      layer: 4,
+      intent: `Per-topic context payload. Topic: ${topic}. The agent can pull only the papers it needs.`,
+      topic: topic,
+      context_papers: TOPIC_INDEX[topic] || TOPIC_INDEX["doctrine"],
+      next_step: "fetch a paper directly from AI-Writings or use canon_navigate to find more"
+    }, 200, 300);
   }
 
   // Demo HTML page
@@ -759,6 +813,410 @@ const MCP_MANIFEST = {
   ]
 };
 
+// ===== Agent Priming Toolkit (4 layers + 3 jobs) =====
+
+const AGENT_MANIFEST = {
+  "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+  "version": "1.0.0",
+  "layer": 1,
+  "name": "manifest",
+  "service": "live-canon.superinstance.dev",
+  "size_bytes": 612,
+  "intent": "First-contact payload. Tell the agent what this place is in 1 paragraph + 1 short list of things to do and not do.",
+
+  "what_this_is": "A 50-paper canon (Quilt cellular-architecture framework) deployed as a read-only API. The hash 0x7a77d96fd020025f is the contract. You are an LLM/agent who just landed. Pick a job (NIL/MAK/RUN) at /api/agent/identify, and the system will hand you the right layers.",
+
+  "what_you_can_do": [
+    "Read 50 papers, trace citation graphs, find lineage of concepts (F-numbers)",
+    "Get the tool catalog at /api/agent/tools (7 tools, all read-only)",
+    "Get the full Mechanic Doctrine at /api/agent/doctrine (9.5KB) before doing real work",
+    "Cite papers in the canon as evidence (the canon is warranted by the hash)",
+    "Stream this payload progressively via Accept: text/event-stream"
+  ],
+
+  "what_you_cannot_do": [
+    "Write to the canon (read-only API — there is no POST)",
+    "Exceed 7 tool calls per turn (the conservation law)",
+    "Cite papers you have not actually fetched (use canon_navigate first)",
+    "Forget that your human user is the operator, not you (F158 / Mechanic Doctrine)"
+  ],
+
+  "next_step": "POST {\"job\": \"NIL|MAK|RUN\"} to /api/agent/identify to get the right layers for your job.",
+
+  "the_doctrine_in_1_line": "You are a specialist, warranted by the canon's hash, hired for a specific job. The operator is the captain. You are the wrench. (F158)",
+
+  "the_conservation_laws_in_1_line": "Attention budget 4096, action potential 7, info throughput 12. Fence crossing = HTTP 429. (F161)",
+
+  "the_room_in_1_line": "A room is a cell. A cell is a room. The protocol is the breath. The inhabitant is the body. (F162)",
+
+  "links": {
+    "identify": "https://live-canon.superinstance.dev/api/agent/identify",
+    "tools": "https://live-canon.superinstance.dev/api/agent/tools",
+    "doctrine": "https://live-canon.superinstance.dev/api/agent/doctrine",
+    "context": "https://live-canon.superinstance.dev/api/agent/context",
+    "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+    "jobs": "https://live-canon.superinstance.dev/api/agent/jobs"
+  }
+};
+
+const JOB_PROFILES = {
+  NIL: {
+  "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+  "version": "1.0.0",
+  "name": "NIL",
+  "title": "Navigate, Inspect, Learn",
+  "layer": 1,
+  "intent": "Job profile for an agent that is reading, browsing, or learning. No mutation, no production of artifacts. Just explore.",
+
+  "you_are": "A reader. You browse, you read, you summarize. You cite what you read. You do not produce new artifacts. You do not run tools that mutate.",
+
+  "your_mission": "Learn one thing well. Pick a topic, fetch the relevant papers, read the lineage, summarize. If the user wanted production, they'd have asked for MAK.",
+
+  "your_tools": [
+    "canon_navigate — to walk the citation graph from a paper",
+    "canon_lineage — to trace a concept (F-number) through time",
+    "canon_hash — to verify the canon state"
+  ],
+
+  "your_do_not": [
+    "Call canon_tick (it re-balances; not your job)",
+    "Cite a paper you haven't fetched (use canon_navigate first)",
+    "Produce papers or code (that's MAK)"
+  ],
+
+  "response_pattern": {
+    "name": "The 2-Pattern NIL Response",
+    "format": "Structure your response as:\n  1. ROUTE — where you went in the canon (which papers, which F-numbers)\n  2. NOTE — what you learned (in 1-3 sentences, citing the papers)"
+  },
+
+  "your_layers": [
+    "https://live-canon.superinstance.dev/api/agent/manifest"
+  ],
+
+  "your_fence": "If you find yourself writing a new paper, switch to MAK. If you find yourself running tools that mutate, you don't have the layers. (F161 / Conservation Law: IT = 12 cells per TICK max)",
+
+  "good_NIL_questions": [
+    "What does F140 (integrity) actually compute?",
+    "How do F160 and F158 relate? (Working Animal Doctrine vs Mechanic Doctrine)",
+    "What papers cite F115 (BIND)?",
+    "What's the lineage of polyformalism (F110)?"
+  ]
+},
+  MAK: {
+  "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+  "version": "1.0.0",
+  "name": "MAK",
+  "title": "Make — produce papers, code, or demos",
+  "layer": 1,
+  "intent": "Job profile for an agent that will produce artifacts (papers, code, demos, papers-on-papers). This profile returns the layers the agent needs to do good work.",
+
+  "you_are": "A specialist who writes or builds. You are warrantable: if you cite a paper, you have read it. If you write code, it runs. If you make a demo, it loads. The canon trusts you because your work is verifiable.",
+
+  "your_mission": "Make one good thing. Do not make 5 things. Pick the smallest version that proves the idea. Ship it. The hash is the contract.",
+
+  "your_tools": [
+    "canon_navigate — to find what already exists in the canon (don't reinvent)",
+    "canon_lineage — to trace a concept through time (F-numbers)",
+    "canon_confluence — to find shared F-numbers and suggest a synthesis paper",
+    "canon_ghost — to find the k-nearest neighbors of a paper (inspiration)"
+  ],
+
+  "your_do_not": [
+    "Write a paper that already exists (check canon_navigate first)",
+    "Use the canon_ghost output as a citation (it's inspiration, not evidence)",
+    "Make the paper longer than it needs to be (the worker is small, the canon is deep)"
+  ],
+
+  "response_pattern": {
+    "name": "The 3-Pattern MAK Response",
+    "format": "Before producing, structure your response as:\n  1. WHAT — what you're about to make (one sentence)\n  2. WHY — why this version is the smallest that proves the idea (one sentence)\n  3. HOW — the contract (the hash, the test, the proof that it's done — one sentence)\nThen produce.\n\nAfter producing:\n  1. MOVES — what you did (the diff)\n  2. NEXT — the one obvious extension (optional)"
+  },
+
+  "your_layers": [
+    "https://live-canon.superinstance.dev/api/agent/manifest",
+    "https://live-canon.superinstance.dev/api/agent/tools",
+    "https://live-canon.superinstance.dev/api/agent/doctrine"
+  ],
+
+  "your_fence": "If you're going to exceed 7 tool calls in a single turn, you're not making one thing — you're making 5. Pick the smallest one and stop. (F161 / Conservation Law: AP = 7)",
+
+  "the_3_papers_to_know": [
+    {"F": 158, "title": "Mechanic Doctrine", "url": "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-467.md"},
+    {"F": 161, "title": "Conservation Laws as Fences", "url": "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-470.md"},
+    {"F": 162, "title": "PLATO Room Protocol", "url": "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-471.md"}
+  ]
+},
+  RUN: {
+  "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+  "version": "1.0.0",
+  "name": "RUN",
+  "title": "Run, Execute, Deploy",
+  "layer": 1,
+  "intent": "Job profile for an agent that will execute tools, deploy code, or run commands. This is the most powerful and most constrained profile — the agent is trusted to make things happen.",
+
+  "you_are": "An executor. You are warrantable: the things you do are reversible, logged, and named. The operator trusts you because your side effects are visible.",
+
+  "your_mission": "Run the smallest command that does the work. If you need to write a file, write the file. If you need to deploy, deploy. But every action is logged. Every action is bounded by the conservation laws.",
+
+  "your_tools": [
+    "canon_navigate — to find what exists before you run anything",
+    "canon_lineage — to find the F-numbers you need to cite",
+    "canon_tick — to re-balance the canon if the operator asks for it (side effect: small counter update)",
+    "fingerprint_budget — to check your per-fingerprint budget before running"
+  ],
+
+  "your_do_not": [
+    "Call tools that the canon does not expose (the API is the only surface)",
+    "Run more than 7 tools per turn (F161 / AP = 7)",
+    "Bypass the conservation laws (the runtime is the fence, not a suggestion)"
+  ],
+
+  "response_pattern": {
+    "name": "The 1-Pattern RUN Response",
+    "format": "Before running, confirm the spec:\n  1. SPEC — what you understood (one sentence)\n  2. WORK — what you're about to do (one sentence, list the tools)\n  3. CONTRACT — the hash, the test, the proof (one sentence)\n\nThen run.\n\nAfter running:\n  1. DONE — what you did and what changed (one sentence)\n  2. NEXT — the one obvious follow-up (optional)"
+  },
+
+  "your_layers": [
+    "https://live-canon.superinstance.dev/api/agent/manifest",
+    "https://live-canon.superinstance.dev/api/agent/tools",
+    "https://live-canon.superinstance.dev/api/agent/doctrine",
+    "https://live-canon.superinstance.dev/api/agent/context?topic=conservation-laws"
+  ],
+
+  "your_fence": "Every action is visible. Every action is logged in the canon's hash chain. The operator can see what you did. Do not be the Bystander who gives a 5-paragraph plan and never makes the move. (F158 anti-pattern #4)",
+
+  "the_one_thing_you_must_know": "The 5 canon tools (navigate, confluence, lineage, ghost, tick) and the 2 meta tools (hash, agent-priming) are **all read-only**. None of them write to the canon. None of them mutate state visible to other clients. The only thing that writes to the canon is the **cowboy** (the orchestrator agent that this server does not expose). You are not the cowboy. You do not write. If the operator asks you to 'add a paper' or 'fix the canon', tell them: 'that is the cowboy's job. I am the wrench. The cowboy is the operator's other tool.' (F158 / Side-Effect Tiering)",
+
+  "in_case_of_emergency": "If you make a mistake:\n  1. Acknowledge it in your response (move / diff / next format)\n  2. Do not try to silently undo it (the hash chain is append-only)\n  3. Tell the operator what to do to recover (a re-run, a revert, a flag)"
+},
+};
+
+const AGENT_SCHEMA = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://live-canon.superinstance.dev/api/agent/schema",
+  "title": "Agent Priming Toolkit Payload Schema",
+  "version": "1.0.0",
+  "description": "The JSON Schema for all payloads in the agent-priming toolkit. Every layer (manifest, tools, doctrine, context) and every job profile (NIL, MAK, RUN) validates against this schema.",
+
+  "type": "object",
+  "required": ["schema", "version", "name", "intent"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "The URL of this schema. Always present so a validator can find it.",
+      "const": "https://live-canon.superinstance.dev/api/agent/schema"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this payload."
+    },
+    "layer": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4,
+      "description": "Which layer this payload represents (1=manifest, 2=tools, 3=doctrine, 4=context).",
+      "examples": [1, 2, 3, 4]
+    },
+    "name": {
+      "type": "string",
+      "enum": ["manifest", "tools", "doctrine", "context", "NIL", "MAK", "RUN", "schema"],
+      "description": "The name of this payload."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title."
+    },
+    "intent": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 500,
+      "description": "One-paragraph explanation of what this payload does and when to use it."
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size of this payload in bytes. Used for budget tracking."
+    },
+    "service": {
+      "type": "string",
+      "description": "The service this payload is about (e.g., live-canon.superinstance.dev)."
+    },
+    "what_this_is": {
+      "type": "string",
+      "description": "Layer-1 only: the 1-paragraph answer to 'what is this place?'"
+    },
+    "what_you_can_do": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Layer-1 only: short list of affordances."
+    },
+    "what_you_cannot_do": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Layer-1 only: short list of constraints."
+    },
+    "next_step": {
+      "type": "string",
+      "description": "Layer-1 only: the single next URL to call."
+    },
+    "the_doctrine_in_1_line": {
+      "type": "string",
+      "description": "Layer-1 only: 1-line summary of the doctrine."
+    },
+    "the_conservation_laws_in_1_line": {
+      "type": "string",
+      "description": "Layer-1 only: 1-line summary of F161."
+    },
+    "the_room_in_1_line": {
+      "type": "string",
+      "description": "Layer-1 only: 1-line summary of F162."
+    },
+    "you_are": {
+      "type": "string",
+      "description": "Job profiles only: the agent's identity in this job."
+    },
+    "your_mission": {
+      "type": "string",
+      "description": "Job profiles only: the agent's mission in this job."
+    },
+    "your_tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "purpose"],
+        "properties": {
+          "name": { "type": "string" },
+          "purpose": { "type": "string" }
+        }
+      },
+      "description": "Job profiles only: the tools the agent should reach for in this job."
+    },
+    "your_do_not": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Job profiles only: the things the agent should NOT do in this job."
+    },
+    "response_pattern": {
+      "type": "object",
+      "required": ["name", "format"],
+      "properties": {
+        "name": { "type": "string" },
+        "format": { "type": "string" }
+      },
+      "description": "Job profiles only: the response pattern the agent should use."
+    },
+    "your_layers": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "Job profiles only: the URLs of the layers this job needs."
+    },
+    "your_fence": {
+      "type": "string",
+      "description": "Job profiles only: the conservation law that applies most directly to this job."
+    },
+    "the_3_papers_to_know": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "F": { "type": "integer" },
+          "title": { "type": "string" },
+          "url": { "type": "string", "format": "uri" }
+        }
+      },
+      "description": "Job profiles only: the 3 foundational papers this job should know."
+    },
+    "tools": {
+      "type": "array",
+      "description": "Layer-2 only: the tool catalog.",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "input_schema"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "input_schema": { "type": "object" }
+        }
+      }
+    },
+    "doctrine": {
+      "type": "string",
+      "description": "Layer-3 only: the full 9.5KB Mechanic Doctrine (markdown)."
+    },
+    "context_papers": {
+      "type": "array",
+      "description": "Layer-4 only: the relevant papers for the topic.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "F": { "type": "integer" },
+          "title": { "type": "string" },
+          "abstract": { "type": "string" },
+          "url": { "type": "string" }
+        }
+      }
+    },
+    "payload_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{16}$",
+      "description": "FNV-1a 64-bit hash of the payload itself. Useful for diffing across versions."
+    },
+    "session_hash": {
+      "type": "string",
+      "pattern": "^0x[0-9a-f]{16}$",
+      "description": "The cumulative hash of all payloads received in the current session."
+    }
+  },
+
+  "examples": [
+    {
+      "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+      "version": "1.0.0",
+      "name": "manifest",
+      "layer": 1,
+      "intent": "First-contact payload."
+    },
+    {
+      "schema": "https://live-canon.superinstance.dev/api/agent/schema",
+      "version": "1.0.0",
+      "name": "MAK",
+      "layer": 1,
+      "intent": "Job profile for an agent that produces artifacts."
+    }
+  ]
+};
+
+const TOPIC_INDEX = {
+  "doctrine": [
+    {F: 158, title: "F158 - The Mechanic Doctrine", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-467.md", abstract: "Agent priming for vibe-coders. The mechanic doctrine."},
+    {F: 159, title: "F159 - Seven Novel Enhancements from 2026", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-468.md", abstract: "Tool descriptions, MCP, injection defense, output contract, side-effect tiering."}
+  ],
+  "working-animal": [
+    {F: 160, title: "F160 - The Working Animal Doctrine", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-469.md", abstract: "Mechanic to Shepherd. 3 layers. Breeds. Fences. Whistles."},
+    {F: 162, title: "F162 - The PLATO Room Protocol", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-471.md", abstract: "Room is a Cell. Cell is a Room. 6 room opcodes."}
+  ],
+  "conservation-laws": [
+    {F: 161, title: "F161 - Conservation Laws as Fences", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-470.md", abstract: "AB=4096, AP=7, IT=12. Fence crossing = HTTP 429."}
+  ],
+  "marine": [
+    {F: 163, title: "F163 - Sonar Vision as 5 Quilt Cells", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-472.md", abstract: "5 cells: Sonar, Signal, Detect, Tracker, Map. Polyformal Python/Rust/C/TS."},
+    {F: 164, title: "F164 - cocapn-marine as Working Animal Stack", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-473.md", abstract: "6 modules mapped to cells. no_std for control loop. 4 PLATO rooms."}
+  ],
+  "integrity": [
+    {F: 140, title: "F140 - The Negative Space", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-450.md", abstract: "READ, DECOMPOSE, COMPOSE, LEDGER pipeline. 4 leak types."}
+  ],
+  "polyformalism": [
+    {F: 110, title: "F110 - Polyformalism", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-115.md", abstract: "Same model, N languages. FNV-1a 64-bit hash as contract."},
+    {F: 144, title: "F144 - 5-Substrate Polyformal Atlas", url: "https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-455.md", abstract: "Test vector 0xd99bf4fed4705ff9 across Python/JS/C/Rust/Verilog."}
+  ]
+};
+
+
+
+
+
 // ===== Agent Priming =====
 
 const AGENT_PRIMING = `# AGENT PRIMING — live-canon.superinstance.dev
@@ -926,6 +1384,38 @@ The cite tells the operator: this is not my opinion. This is the spec. The canon
 
 live-canon.superinstance.dev · for agents and their humans · 2026-09-03 · F158, F159
 `;
+
+// The doctrine payload (Layer 3): wraps the doctrine in a JSON envelope
+const AGENT_DOCTRINE_PAYLOAD = JSON.stringify({
+  schema: "https://live-canon.superinstance.dev/api/agent/schema",
+  version: "1.0.0",
+  name: "doctrine",
+  layer: 3,
+  intent: "The full Mechanic Doctrine as a 9.5KB text blob inside a JSON envelope. This is the layer-3 payload. Only ingest this if your job is MAK or RUN.",
+  doctrine: AGENT_PRIMING,
+  size_bytes: AGENT_PRIMING.length,
+  notes: [
+    "F158 = Mechanic Doctrine (this document).",
+    "F160 = Working Animal Doctrine (extends F158 to the shepherd/breed/fence frame).",
+    "F161 = Conservation Laws as Fences (the physics of working animals).",
+    "F162 = PLATO Room Protocol (the room is the cell, the cell is the room).",
+    "F159 = Seven Enhancements (the operational layer: tool budget, output contract, etc.)."
+  ]
+}, null, 2);
+
+// The tools payload (Layer 2): wraps the TOOL_MANIFEST in a JSON envelope
+const AGENT_TOOLS_PAYLOAD = JSON.stringify({
+  schema: "https://live-canon.superinstance.dev/api/agent/schema",
+  version: "1.0.0",
+  name: "tools",
+  layer: 2,
+  intent: "The tool catalog. 7 read-only tools. Each tool has a name, description, and JSON Schema for inputs. Use this layer to discover what you can call.",
+  tools: TOOL_MANIFEST.tools,
+  rules: TOOL_MANIFEST.rules,
+  side_effects: TOOL_MANIFEST.side_effects,
+  size_bytes: JSON.stringify(TOOL_MANIFEST).length
+}, null, 2);
+
 
 // ===== HTML demo =====
 const DEMO_HTML = `<!DOCTYPE html>
