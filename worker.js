@@ -436,6 +436,111 @@ const CANON = {
     f_number: 166, phase: 268, date: "2026-09-04",
     ref_papers: [], ref_f_numbers: [158, 159, 163, 164],
   },
+  // F167 (paper-476): the reframe to "data-gathering substrate for the digital twin"
+  476: {
+    number: 476, title: "F167 — The Mudra Vessel Bridge as a Data-Gathering Substrate for the Digital Twin",
+    f_number: 167, phase: 268, date: "2026-09-04",
+    ref_papers: [], ref_f_numbers: [158, 159, 163, 164, 166],
+  },
+  // F168 (paper-477): the trust ladder — voice + co-labeling as first rungs
+  477: {
+    number: 477, title: "F168 — The Trust Ladder: Voice + Co-Labeling as the First Rungs",
+    f_number: 168, phase: 268, date: "2026-09-04",
+    ref_papers: [], ref_f_numbers: [158, 159, 166, 167],
+  },
+  // ---- Lifted gaps: F101-F106, F108, F111-F112, F120-F121, F124-F125, F148, and 3 untitled.
+  // These papers exist in AI-Writings but were not in the original Canon CANON object.
+  // Phases inferred from the surrounding papers (F101-F103 ~225, F105-F112 ~229-232, F120-F125 ~243-247).
+  // Refs scraped from the paper bodies (ref_f_numbers list).
+  411: {
+    number: 411, title: "F101 — Playtest: 6 Assets, 4 Controllers, 2 Bugs, 1 Real Result",
+    f_number: 101, phase: 225, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [97, 98, 100],
+  },
+  412: {
+    number: 412, title: "F102 — Two-Regime Playtest: 2008 Crisis vs 2010-2024 Bull",
+    f_number: 102, phase: 226, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [97, 101, 100],
+  },
+  413: {
+    number: 413, title: "F103 — Wide-N Playtest: 12 Asset Classes, 30 Windows, 4 Ablations, 100-Agent Swarm",
+    f_number: 103, phase: 227, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [97, 98, 101, 102],
+  },
+  // F104 (paper-414) is already in CANON above. 415/416/418 don't have F# in their H1 (predate convention).
+  415: {
+    number: 415, title: "When a Time-Series Forecaster Beats LQR: A Cell-Driven Control Architecture for Robotic Manipulators",
+    f_number: 105, phase: 229, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [100, 104, 105],
+  },
+  416: {
+    number: 416, title: "Brownian Confidence Intervals for Time-Series Forecasts: Why Your CI Should Grow with √t",
+    f_number: 106, phase: 230, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [100, 104, 106],
+  },
+  // F107 (paper-417) already in CANON.
+  418: {
+    number: 418, title: "Counter-Intuitive Robustness: How a Volatility-Adaptive Trading Strategy Benefits from 10-25% Stale Data",
+    f_number: 108, phase: 232, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [100, 104, 106, 108],
+  },
+  // F109 (paper-419), F110 (paper-420) already in CANON.
+  421: {
+    number: 421, title: "Risk-Management as a Feature: When the Goal is Losing Less, Not Making More",
+    f_number: 111, phase: 233, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [100, 110, 111],
+  },
+  422: {
+    number: 422, title: "The Reflexivity Problem: How Multi-Agent Time-Series Forecasters Create Self-Fulfilling Predictions",
+    f_number: 112, phase: 234, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [110, 111, 112],
+  },
+  // F113 (paper-423), F114 (paper-424) already in CANON.
+  // F115 (paper-425) through F119 (paper-429) already in CANON.
+  // F120 (paper-430): Shape RAG — the cell IS the embedding.
+  430: {
+    number: 430, title: "F120 — Shape RAG: The Cell IS the Embedding",
+    f_number: 120, phase: 242, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [115, 119, 120],
+  },
+  // F121 (paper-431): Cell-as-Vector.
+  431: {
+    number: 431, title: "F121 — Cell-as-Vector: The 4096-dim Flat Projection of a Cell Fabric",
+    f_number: 121, phase: 243, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [120, 121],
+  },
+  // F122 (paper-432), F123 (paper-433) already in CANON.
+  434: {
+    number: 434, title: "F124 — S-QL: The Shape Query Language",
+    f_number: 124, phase: 246, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [120, 123, 124],
+  },
+  435: {
+    number: 435, title: "F125 — The Shape-RAG API: 4 Endpoints, 10 Scenarios",
+    f_number: 125, phase: 247, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [120, 124, 125],
+  },
+  436: {
+    number: 436, title: "Dynamic Shape Morphing: Reinforcement Learning on Cell Fabrics",
+    f_number: 126, phase: 248, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [120, 123, 126],
+  },
+  437: {
+    number: 437, title: "Dial-Aware Cell Addressing: From FNV-1a to Compositional Cell Identifiers",
+    f_number: 127, phase: 249, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [120, 123, 115, 125, 122, 127],
+  },
+  438: {
+    number: 438, title: "The Polyformalism Atlas: Mapping 6 Substrates onto 7 Algebraic Laws",
+    f_number: 128, phase: 250, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [115, 128],
+  },
+  // F148 (paper-460): Canon Expansion: bringing F98-F114 into the Live Canon.
+  460: {
+    number: 460, title: "F148 — Canon Expansion: Bringing F98-F114 into the Live Canon",
+    f_number: 148, phase: 252, date: "2026-09-03",
+    ref_papers: [], ref_f_numbers: [114, 98, 100, 104, 113, 148],
+  },
 };
 
 // ===== Request handler =====
@@ -463,6 +568,9 @@ async function routeRequest(request) {
         title: p.title,
         f_number: p.f_number,
         phase: p.phase,
+        date: p.date || null,
+        ref_papers: p.ref_papers || [],
+        ref_f_numbers: p.ref_f_numbers || [],
       })),
       count: Object.keys(CANON).length,
     });
@@ -595,7 +703,23 @@ async function routeRequest(request) {
 
   // Demo HTML page
   if (path === "/" || path === "/index.html") {
-    return new Response(DEMO_HTML, {
+    // Server-render the paper list so the first paint is not empty.
+    const papers = Object.values(CANON).sort((a, b) => a.number - b.number);
+    const paperListHtml = papers.map(p => {
+      const refs = (p.ref_f_numbers || []).map(f => `F${f}`).join(", ");
+      const fLabel = p.f_number ? `F${p.f_number}` : "—";
+      const date = p.date || "undated";
+      return `<div class="paper-row">
+        <span class="num">#${p.number}</span>
+        <a class="title" href="https://github.com/SuperInstance/AI-Writings/blob/master/seed-canon/papers/paper-${p.number}.md" target="_blank" rel="noopener">${escapeHtml(p.title)}</a>
+        <span class="f-label">${fLabel}</span>
+        <span class="phase">phase ${p.phase}</span>
+        <span class="date">${date}</span>
+        <span class="refs">refs: ${refs || "—"}</span>
+      </div>`;
+    }).join("\n");
+    const html = DEMO_HTML.replace("__PAPER_LIST__", paperListHtml);
+    return new Response(html, {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
   }
@@ -612,6 +736,16 @@ function jsonResponse(obj, status = 200, maxAge = 60) {
       "Cache-Control": `public, max-age=${maxAge}`,
     },
   });
+}
+
+// Minimal HTML escape for title strings. Titles can contain & < > ' ".
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 // ===== Tool Manifest =====
@@ -1457,6 +1591,25 @@ const DEMO_HTML = `<!DOCTYPE html>
   .result { background: #1a1c25; padding: 1rem; border-radius: 5px;
             margin: 1rem 0; min-height: 100px; }
   .hash { color: #8bcf6e; font-family: monospace; }
+  .paper-row {
+    display: grid;
+    grid-template-columns: 4rem 1fr 4rem 7rem 6.5rem 1fr;
+    gap: 0.5rem;
+    align-items: center;
+    background: #1a1c25;
+    padding: 0.4rem 0.7rem;
+    border-radius: 4px;
+    margin: 0.2rem 0;
+    border-left: 3px solid #f4b942;
+    font-size: 0.88rem;
+  }
+  .paper-row .num { color: #8bcf6e; font-family: monospace; }
+  .paper-row .title { color: #d8d9da; text-decoration: none; }
+  .paper-row .title:hover { color: #f4b942; text-decoration: underline; }
+  .paper-row .f-label { color: #f4b942; font-family: monospace; font-size: 0.85rem; }
+  .paper-row .phase { color: #6e7b8b; font-size: 0.78rem; }
+  .paper-row .date { color: #6e7b8b; font-size: 0.78rem; }
+  .paper-row .refs { color: #8bcf6e; font-size: 0.78rem; }
 </style>
 </head>
 <body>
@@ -1470,6 +1623,16 @@ const DEMO_HTML = `<!DOCTYPE html>
   State hash: <span class="hash" id="state-hash">computing…</span> |
   Papers: <span id="paper-count">?</span>
 </p>
+
+<h2 id="papers-heading">All Papers</h2>
+<p>
+  The complete canon, sorted by paper number. Click any title to
+  fetch its full body from AI-Writings. <span id="paper-list-status">Loading…</span>
+</p>
+<div id="paper-list">
+<!-- paper rows are server-rendered below; JS may re-sort -->
+__PAPER_LIST__
+</div>
 
 <h2>1. NAVIGATE — BFS through citations</h2>
 <p>
