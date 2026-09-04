@@ -1,20 +1,108 @@
 // worker.js — The Live Canon as a Cloudflare Worker
 //
-// Exposes the 5 Live Canon operations as a REST API:
-//   GET  /api/canon                  - list all loaded papers
-//   GET  /api/canon/navigate?paper=N&depth=D - BFS from paper N
-//   GET  /api/canon/confluence?papers=A,B,C  - join 2+ papers
-//   GET  /api/canon/lineage?f=N       - papers that cite F{N}
-//   GET  /api/canon/ghost?paper=N&k=K  - k nearest neighbors
-//   GET  /api/canon/tick              - re-balance the canon
-//   GET  /api/canon/hash              - state hash of the canon
-//   GET  /                           - HTML demo page
+// ============================================================================
+// ARCHITECTURE
+// ============================================================================
 //
-// The canon is loaded from the bundled corpus (a JSON snapshot of
-// the 50+ paper metadata).  On each request, the relevant operation
-// is computed and returned as JSON.
+// This is the production deployment of F129 (the Live Canon as a navigable
+// cell fabric). It exposes the AI-Writings seed canon (70+ papers, F98-F168)
+// as a read-only REST API on https://live-canon.superinstance.dev.
 //
-// This is the production deployment of F129 (the Live Canon).
+// The canon is bundled inline in this file (the `CANON` object). It is NOT
+// loaded from KV, D1, or R2. The reason: a 1-file Worker is auditable, fast
+// (zero cold start for data), and honest. The hash is the contract.
+//
+// ============================================================================
+// ENDPOINTS
+// ============================================================================
+//
+//   GET  /api/canon                  list all 70 papers
+//   GET  /api/canon/navigate         BFS from paper N: ?paper=N&depth=D
+//   GET  /api/canon/confluence       join 2+ papers: ?papers=A,B,C
+//   GET  /api/canon/lineage          papers that cite F{N}: ?f=N
+//   GET  /api/canon/ghost            k nearest neighbors: ?paper=N&k=K
+//   GET  /api/canon/tick             re-balance (returns cell count)
+//   GET  /api/canon/hash             state hash of the canon
+//   GET  /api/agent/manifest         Layer 1 of the agent priming toolkit
+//   GET  /api/agent/tools            Layer 2 — tool catalog
+//   GET  /api/agent/doctrine         Layer 3 — full Mechanic Doctrine
+//   GET  /api/agent/context          Layer 4 — topic-specific paper list
+//   POST /api/agent/identify         Returns the right layers for NIL/MAK/RUN
+//   GET  /api/agent/jobs             All 3 job profiles
+//   GET  /api/agent/schema           JSON Schema for all payloads
+//   GET  /                         HTML demo page (server-renders all 70)
+//
+// ============================================================================
+// THE 5 CANON OPERATIONS (F129)
+// ============================================================================
+//
+//   1. NAVIGATE   — BFS through the citation graph from a paper.
+//   2. CONFLUENCE — Join 2+ papers, find shared F-numbers, suggest a synthesis.
+//   3. LINEAGE    — Trace a concept (F-number) through time.
+//   4. GHOST      — Find k nearest neighbors by dial-vector cosine similarity.
+//   5. TICK       — Re-balance the canon (returns cell count; no-op for read).
+//
+// ============================================================================
+// THE CELL ENCODING (F110, F144 — polyformalism)
+// ============================================================================
+//
+// Each paper maps to a 16-dial cell. The encoding is byte-exact across
+// Python, JS, C, Rust, Verilog, and VHDL. See cellToDials() below.
+//
+//   dial 0:  paper_number * 131
+//   dial 1:  title_hash_lo  (FNV-1a 64, low 16 bits)
+//   dial 2:  f_number * 218
+//   dial 3:  phase * 218
+//   dial 4:  (year - 1970) * 546
+//   dial 5:  n_refs * 256 (capped at 0x7FFF)
+//   dial 6:  title_hash_hi  (FNV-1a 64, bits 16-31)
+//   dials 7-15: 0 (reserved for future use)
+//
+// The state hash is FNV-1a 64 over the sorted concatenation of all dials.
+// If two substrates produce different hashes for the same canon, one of
+// them is wrong. This is the polyformalism guarantee (F110).
+//
+// ============================================================================
+// AGENT PRIMING (F158, F165, F167, F168)
+// ============================================================================
+//
+// The agent endpoints serve a 4-layer progressive-disclosure toolkit for
+// LLMs/agents serving humans (the Mechanic Doctrine, F158). The layers are:
+//   1. MANIFEST  — what this place is (600B)
+//   2. TOOLS     — the read-only tool catalog (7KB)
+//   3. DOCTRINE  — the full Mechanic Doctrine (9.5KB)
+//   4. CONTEXT   — per-topic paper list (1-50KB)
+//
+// The 3 job profiles are NIL (navigate/inspect), MAK (make/write), and
+// RUN (execute/deploy). Each profile returns the layers the agent needs
+// to do good work without over-sharing.
+//
+// ============================================================================
+// HASH CONTRACTS
+// ============================================================================
+//
+//   FNV_OFFSET = 0xCBF29CE484222325
+//   FNV_PRIME  = 0x00000100000001B3
+//   64-bit, modulo 2^64, applied per byte
+//
+// The same constants appear in Python `src/hash.py` (mudra-vessel-bridge)
+// and in the Quilt framework's C/Rust/Verilog/VHDL ports. They are
+// NEVER reimplemented. They are imported from one place.
+//
+// ============================================================================
+// AUDIT HISTORY
+// ============================================================================
+//
+//   2026-09-03  52 papers, hash 0x89741eb67ca6f055  (F98-F166, plus lifted gaps)
+//   2026-09-04  70 papers, hash 0x16244e621bbd6d9c  (added F167, F168, +16 gaps)
+//
+// The 18 added papers all exist in the AI-Writings seed canon. They were
+// simply not wired into the live canon. The 16 lifted gaps are papers
+// 411-422 (predate the F-numbering convention), 430-438 (F120-F128), and
+// 460 (F148). Their phases were inferred from the surrounding papers.
+// Their refs were scraped from the paper bodies.
+//
+// ============================================================================
 
 // ===== FNV-1a 64-bit hash (UTF-8 encoded, byte-exact with Python) =====
 function fnv1a_64(s) {
@@ -29,6 +117,15 @@ function fnv1a_64(s) {
 }
 
 // ===== Cell encoding (matches Python/C/Rust/Verilog/VHDL byte-exact) =====
+//
+// Each paper becomes a 16-dial cell. The dials are tuned for cosine
+// similarity: title hash dominates, f_number and phase cluster in time,
+// reference count measures how connected the paper is.
+//
+// The 16-dial space is small enough for brute force (N=70 is trivial)
+// but large enough to be a real metric. If a paper shows up in the
+// top-5 of cosine-similarity to a query paper, it usually means they're
+// in the same cluster (same f-number family, same phase, similar refs).
 function cellToDials(paper) {
   const year = parseInt(paper.date.substring(0, 4)) || 1970;
   const year_q = (year - 1970) * 546;
