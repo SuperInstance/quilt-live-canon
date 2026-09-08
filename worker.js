@@ -1,31 +1,14 @@
-// worker.js — The Live Canon as a Cloudflare Worker (Module Format)
+// worker.js — The Live Canon as a Cloudflare Worker
 //
-// Exposes the Live Canon operations + Playground + WebSocket Room as a REST API:
+// Exposes the Live Canon operations + Playground + WebSocket Room as a REST API.
 //
-//   GET  /api/canon                       - list all loaded papers
-//   GET  /api/canon/navigate?paper=N&depth=D - BFS from paper N
-//   GET  /api/canon/confluence?papers=A,B,C  - join 2+ papers
-//   GET  /api/canon/lineage?f=N           - papers that cite F{N}
-//   GET  /api/canon/lineage?from=A&to=B   - shortest citation path A→B (BFS, ≤6 hops)
-//   GET  /api/canon/ghost?paper=N&k=K     - k nearest neighbors (cosine)
-//   GET  /api/canon/similar?id=N&k=K      - top-k similar papers (heuristic)
-//   GET  /api/canon/random                - one random cell from the canon
-//   GET  /api/canon/cell/N                - full cell data for paper N
-//   GET  /api/canon/tick                  - re-balance the canon
-//   GET  /api/canon/hash                  - state hash of the canon
-//   GET  /api/cell/seed                   - canonical seed cell (id=1, dials=1..16)
-//   POST /api/cell                        - submit a new cell {dials, refs, title}
-//   GET  /api/vibe?lang=X&test=1          - the Quilt vibe-code protocol
-//   GET  /api/quilt/verify?lang=X&hash=0x - verify byte-exact compatibility
-//   GET  /api/charter                     - the Quilt Charter (markdown)
-//   GET  /api/tutorial                    - 5-minute tutorial (markdown)
-//   GET  /api/ports                       - list all verified polyformalism ports
-//   GET  /api/health                      - liveness
-//   GET  /playground                      - self-contained Playground HTML
-//   GET  /                                - demo HTML page
-//   GET  /ws/room/:id                     - WebSocket upgrade → Room Durable Object
+// The canon is loaded from the bundled corpus. On each request, the relevant
+// operation is computed and returned as JSON.
 //
-// The canon is loaded from the bundled corpus (a JSON snapshot of the
+// This file uses the Service Worker format (no `export` statements) so it
+// can be uploaded via the CF scripts API. The Room Durable Object is
+// defined separately in `room-do.js` and wired via `wrangler.toml`.
+
 // paper metadata).  On each request, the relevant operation is computed
 // and returned as JSON.
 //
@@ -1664,44 +1647,6 @@ loadPort("python");
 </body>
 </html>`;
 
-// ===== WebSocket Room Durable Object =====
-export class Room {
-  constructor(state, env) {
-    this.state = state;
-    this.env = env;
-  }
-  async fetch(request) {
-    if (request.headers.get("Upgrade") !== "websocket") {
-      return new Response("expected websocket", { status: 400 });
-    }
-    const pair = new WebSocketPair();
-    const client = pair[0];
-    const server = pair[1];
-    // Use the Hibernation API so the DO can sleep between messages
-    this.state.acceptWebSocket(server);
-    return new Response(null, { status: 101, webSocket: client });
-  }
-  async webSocketMessage(ws, message) {
-    // Broadcast to all connected clients in this room
-    for (const peer of this.state.getWebSockets()) {
-      try { peer.send(message); } catch (e) { /* ignore */ }
-    }
-  }
-  async webSocketClose(ws, code, reason, wasClean) {
-    try { ws.close(code, reason); } catch (e) { /* ignore */ }
-  }
-  async webSocketError(ws, error) {
-    try { ws.close(1011, "ws error"); } catch (e) { /* ignore */ }
-  }
-}
-
-// ===== Worker export (module format) =====
-export default {
-  async fetch(request, env, ctx) {
-    return handleRequest(request, env);
-  },
-};
-
 async function handleRequest(request, env) {
   try {
     return await routeRequest(request, env);
@@ -1709,3 +1654,8 @@ async function handleRequest(request, env) {
     return jsonResponse({ error: e.message, stack: e.stack }, 500);
   }
 }
+
+// ===== Service worker entry point =====
+addEventListener("fetch", (event) => {
+  event.respondWith(handleRequest(event.request));
+});
