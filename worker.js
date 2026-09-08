@@ -7,8 +7,10 @@
 //   GET  /api/canon/lineage?f=N       - papers that cite F{N}
 //   GET  /api/canon/ghost?paper=N&k=K  - k nearest neighbors
 //   GET  /api/canon/tick              - re-balance the canon
+//   GET  /api/vibe?lang=X&test=1     - the Quilt vibe-code protocol
+//   GET  /api/quilt/verify?lang=X&hash=0x...  - verify byte-exact compatibility
 //   GET  /api/canon/hash              - state hash of the canon
-//   GET  /                           - HTML demo page
+//   GET  /api/                          - HTML demo page
 //
 // The canon is loaded from the bundled corpus (a JSON snapshot of
 // the 50+ paper metadata).  On each request, the relevant operation
@@ -247,7 +249,7 @@ const CANON = {
 };
 
 // ===== Vibe-code protocol =====
-// A 30-second prompt that produces a working Quilt in any language
+// A 30-second prompt that produces a working Quilt in any language.
 function vibeResponse(lang, includeTest) {
   const proto = `You are writing a Quilt cell. A cell has:
 - 16 signed Q1.15 dials (range -32768..32767)
@@ -279,10 +281,10 @@ If your port produces this hash, it is byte-exact compatible with the canon.`;
     protocol: proto,
     ...(includeTest ? { test_vector: testVec, expected_hash: "0xe435d91d6d92a1d8" } : {}),
     links: {
-      "taxonomy": "https://superinstance.github.io/quilt-claude-charts/quilt-cell-taxonomy.html",
-      "simulator": "https://superinstance.github.io/quilt-claude-charts/quilt-fabric-runtime.html",
-      "languages": "https://superinstance.github.io/quilt-claude-charts/quilt-language-map.html",
-      "protocol_md": "https://github.com/SuperInstance/quilt-claude-charts/blob/main/QUILT_VIBE_PROTOCOL.md",
+      taxonomy: "https://superinstance.github.io/quilt-claude-charts/quilt-cell-taxonomy.html",
+      simulator: "https://superinstance.github.io/quilt-claude-charts/quilt-fabric-runtime.html",
+      languages: "https://superinstance.github.io/quilt-claude-charts/quilt-language-map.html",
+      protocol_md: "https://github.com/SuperInstance/quilt-claude-charts/blob/main/QUILT_VIBE_PROTOCOL.md",
     },
     byte_exact_test: "0xe435d91d6d92a1d8",
     known_ports: ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go"],
@@ -293,7 +295,7 @@ function verifyPort(lang, hash) {
   const expected = "0xe435d91d6d92a1d8";
   const known = ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go"];
   const isKnown = known.includes(lang.toLowerCase());
-  const isMatch = hash.toLowerCase() === expected;
+  const isMatch = (hash || "").toLowerCase() === expected;
   return {
     language: lang,
     reported_hash: hash,
@@ -302,8 +304,8 @@ function verifyPort(lang, hash) {
     admitted_to_canon: isMatch,
     known_port: isKnown,
     verdict: isMatch
-      ? `✓ ${lang} is a verified Quilt port (byte-exact compatible).`
-      : `✗ Hash mismatch. Expected ${expected}, got ${hash}. The port is NOT byte-exact.`,
+      ? `OK ${lang} is a verified Quilt port (byte-exact compatible).`
+      : `FAIL Hash mismatch. Expected ${expected}, got ${hash || "(empty)"}. The port is NOT byte-exact.`,
   };
 }
 
@@ -376,17 +378,16 @@ async function routeRequest(request) {
     return jsonResponse({ ok: true, papers: Object.keys(CANON).length });
   }
 
-  // /api/vibe — return the Quilt vibe-code protocol
-  // GET /api/vibe?lang=go   -> the 30-second prompt
-  // GET /api/vibe?lang=go&test=1 -> the prompt + the test vector
+  // /api/vibe — return the Quilt vibe-code protocol for any language
+  // GET /api/vibe?lang=go         -> the 30-second prompt
+  // GET /api/vibe?lang=go&test=1  -> the prompt + the test vector
   if (path === "/api/vibe" || path === "/api/vibe/") {
     const lang = url.searchParams.get("lang") || "python";
     const includeTest = url.searchParams.get("test") === "1";
     return jsonResponse(vibeResponse(lang, includeTest));
   }
 
-  // /api/quilt/verify?hash=0x...&cell=...
-  // Returns whether a (language, hash) pair is byte-exact compatible
+  // /api/quilt/verify — verify a (language, hash) pair is byte-exact
   if (path === "/api/quilt/verify" || path === "/api/quilt/verify/") {
     const hash = url.searchParams.get("hash") || "";
     const lang = url.searchParams.get("lang") || "unknown";
