@@ -846,6 +846,7 @@ async function routeRequest(request, env) {
         { provider: "Z.AI coding",   model: "glm-4.5-flash",                               label: "ZAI-flash",   role: "reasoning-fast" },
         { provider: "Z.AI coding",   model: "glm-4.5",                                     label: "ZAI-4.5",     role: "slow-but-deep" },
         { provider: "Z.AI coding",   model: "glm-4.6",                                     label: "ZAI-4.6",     role: "slow-but-deep" },
+        { provider: "Z.AI coding",   model: "glm-4.5-air",                                 label: "ZAI-air",     role: "faster-flash" },
         { provider: "DeepInfra",     model: "moonshotai/Kimi-K2.7-Code",                   label: "Kimi",        role: "code-focused" },
         { provider: "DeepInfra",     model: "moonshotai/Kimi-K2-Instruct",                 label: "Kimi-K2",     role: "code-focused" },
         { provider: "Gemini",        model: "gemini-2.5-flash",                            label: "Gemini",      role: "rate-limited" },
