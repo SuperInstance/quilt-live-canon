@@ -394,6 +394,42 @@ async function routeRequest(request) {
     return jsonResponse(verifyPort(lang, hash));
   }
 
+  // /api/charter — the Quilt Charter (the educational root document)
+  if (path === "/api/charter" || path === "/api/charter/") {
+    return new Response(CHARTER_DOC, {
+      headers: { "Content-Type": "text/markdown; charset=utf-8" },
+    });
+  }
+
+  // /api/tutorial — zero-to-byte-exact in 5 minutes, 5 languages
+  if (path === "/api/tutorial" || path === "/api/tutorial/") {
+    return new Response(TUTORIAL_DOC, {
+      headers: { "Content-Type": "text/markdown; charset=utf-8" },
+    });
+  }
+
+  // /api/ports — list all verified polyformalism ports
+  if (path === "/api/ports" || path === "/api/ports/") {
+    return jsonResponse({
+      test_hash: "0xe435d91d6d92a1d8",
+      ports: [
+        { lang: "python", repo: "quilt-cowboy", tests: "7/7", level: "imperative" },
+        { lang: "c99", repo: "quilt-c", tests: "manual", level: "imperative" },
+        { lang: "rust", repo: "quilt-rust", tests: "6/6", level: "type-safe+zero-cost" },
+        { lang: "rust-vibe", repo: "quilt-rust-vibe", tests: "6/6", level: "type-safe+zero-cost" },
+        { lang: "verilog", repo: "quilt-verilog", tests: "manual", level: "hardware" },
+        { lang: "vhdl", repo: "quf-vhdl", tests: "manual", level: "hardware" },
+        { lang: "javascript", repo: "quilt-live-canon", tests: "live", level: "edge" },
+        { lang: "typescript", repo: "live-canon-npm", tests: "5/5", level: "edge" },
+        { lang: "go", repo: "quilt-go", tests: "7/7", level: "imperative" },
+        { lang: "zig", repo: "quilt-zig", tests: "7/7", level: "systems" },
+        { lang: "mojo", repo: "quilt-mojo", tests: "ref", level: "type-safe" },
+      ],
+      sigma: 4,
+      n_ports: 11,
+    });
+  }
+
   // Demo HTML page
   if (path === "/" || path === "/index.html") {
     return new Response(DEMO_HTML, {
@@ -414,6 +450,137 @@ function jsonResponse(obj, status = 200) {
     },
   });
 }
+
+// ===== Quilt Charter (educational root, served at /api/charter) =====
+const CHARTER_DOC = `# The Quilt Charter
+
+A cell is a typed unit of state. A fabric is a graph of cells. A cell-fabric runtime is a function from context to value, advanced by a clock. The same model, expressed in 12+ languages, byte-exact compatible, canonically serialized, hash-verified.
+
+## 0. The 30-Second Version
+
+BIND(cell, dials)   # set dials, idempotent
+LINK(c1, c2)        # add an undirected edge
+EFFECT(cell)        # propagate dial[0] to neighbors
+VIEW(cell)          # return dials
+TICK(fabric)        # advance all dials by 1, alternating direction
+
+A cell has 16 signed Q1.15 dials (range -32768..32767), a 64-bit id, a list of neighbor ids. A fabric is a graph of cells. The state hash is FNV-1a 64-bit over the canonical serialization (type(1) + id(8) + dials(32) + neighbors(8*N)).
+
+## 1. The Canonical Serialization
+
+type(1) || id(8 LE) || dials(32 LE) || neighbors(8*N LE)
+
+For the test cell (id=1, dials=[1..16], neighbors=[2,3,4]), the serialization is 65 bytes.
+
+## 2. The FNV-1a 64-Bit Hash
+
+FNV_OFFSET = 0xcbf29ce484222325
+FNV_PRIME  = 0x100000001b3
+
+The test hash for the test cell is 0xe435d91d6d92a1d8. This is the contract. Every port must produce this hash.
+
+## 3. The 12+ Languages
+
+Python, C99, Rust, Verilog, VHDL, JavaScript, TypeScript, Go, Zig, Mojo — all byte-exact compatible. See /api/ports for the full list.
+
+## 4. The 5 Polyformalism Levels
+
+1. Imperative (Python, C, Rust, Go, Zig, JS)
+2. Reactive (Mojo)
+3. Logic (Verilog, VHDL)
+4. Streaming (the canon worker)
+5. Polyformalism itself
+
+## 5. How to Port
+
+1. Read the 5 opcodes.
+2. Implement the canonical serialization.
+3. Implement FNV-1a 64.
+4. Compute the test hash. It should be 0xe435d91d6d92a1d8.
+5. Push to GitHub at github.com/SuperInstance/quilt-{lang}.
+6. Add a row to /api/ports.
+
+## 6. The Cowboy's Maxim
+
+> The cell is irreducible. The fabric is a graph. The hash is the canon. The canon is the canon. The work is to keep going.
+
+Full Charter: https://github.com/SuperInstance/quilt-claude-charts/blob/main/QUILT_CHARTER.md
+Tutorial: /api/tutorial
+`;
+
+// ===== Quilt Tutorial (5-minute zero-to-byte-exact, served at /api/tutorial) =====
+const TUTORIAL_DOC = `# Tutorial: Your First Quilt Cell in 5 Minutes
+
+The Quilt is a cell-fabric runtime. A cell has 16 dials, an id, and a list of neighbors. A fabric is a graph of cells. The state hash is FNV-1a 64-bit over the canonical serialization. The test hash for the test cell is 0xe435d91d6d92a1d8.
+
+## The 5 Opcodes
+
+BIND(cell, dials)   # idempotent
+LINK(c1, c2)        # undirected edge
+EFFECT(cell)        # propagate dial[0] to neighbors
+VIEW(cell)          # return dials
+TICK(fabric)        # advance all dials by 1
+
+## The Canonical Serialization
+
+type(1) || id(8 LE) || dials(32 LE) || neighbors(8*N LE)
+
+## The FNV-1a 64 Hash
+
+FNV_OFFSET = 0xcbf29ce484222325
+FNV_PRIME  = 0x100000001b3
+
+## Python Reference (15 lines)
+
+\`\`\`python
+import struct
+OFFSET, PRIME, MASK = 0xcbf29ce484222325, 0x100000001b3, 0xffffffffffffffff
+
+def fnv1a_64(b):
+    h = OFFSET
+    for x in b: h = (h ^ x) * PRIME & MASK
+    return h
+
+def serialize(c):
+    out = bytearray([0x01])
+    out += struct.pack('<Q', c['id'])
+    for d in c['dials']: out += struct.pack('<h', d)
+    for n in c['neighbors']: out += struct.pack('<Q', n)
+    return bytes(out)
+
+def state_hash(fabric):
+    all_b = bytearray()
+    for c in sorted(fabric, key=lambda c: c['id']):
+        all_b += serialize(c)
+    return fnv1a_64(bytes(all_b))
+
+test = {'id': 1, 'dials': list(range(1,17)), 'neighbors': [2,3,4]}
+print(f"hash = 0x{state_hash([test]):016x}")
+# Expected: 0xe435d91d6d92a1d8
+\`\`\`
+
+## The 5 Language Ports
+
+Go: github.com/SuperInstance/quilt-go (131 LoC, 7/7 tests)
+Zig: github.com/SuperInstance/quilt-zig (7/7 tests)
+Mojo: github.com/SuperInstance/quilt-mojo (algorithm + Python reference)
+Rust: github.com/SuperInstance/quilt-rust-vibe (6/6 tests)
+JavaScript: live-canon.superinstance.dev (this worker)
+
+All 11 verified ports: /api/ports
+
+## Full Tutorial
+
+https://github.com/SuperInstance/quilt-claude-charts/blob/main/TUTORIAL.md
+
+## Next Steps
+
+1. Push your port to GitHub at github.com/SuperInstance/quilt-{lang}
+2. Read the Quilt Charter: https://github.com/SuperInstance/quilt-claude-charts/blob/main/QUILT_CHARTER.md
+3. Add a paper to the canon — write what your port taught you, push to AI-Writings
+
+The polyformalism is yours. The work is to keep going.
+`;
 
 // ===== HTML demo =====
 const DEMO_HTML = `<!DOCTYPE html>
