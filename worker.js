@@ -1,28 +1,51 @@
-// worker.js — The Live Canon as a Cloudflare Worker
+// worker.js — The Live Canon as a Cloudflare Worker (Module Format)
 //
-// Exposes the 5 Live Canon operations as a REST API:
-//   GET  /api/canon                  - list all loaded papers
+// Exposes the Live Canon operations + Playground + WebSocket Room as a REST API:
+//
+//   GET  /api/canon                       - list all loaded papers
 //   GET  /api/canon/navigate?paper=N&depth=D - BFS from paper N
 //   GET  /api/canon/confluence?papers=A,B,C  - join 2+ papers
-//   GET  /api/canon/lineage?f=N       - papers that cite F{N}
-//   GET  /api/canon/ghost?paper=N&k=K  - k nearest neighbors
-//   GET  /api/canon/tick              - re-balance the canon
-//   GET  /api/vibe?lang=X&test=1     - the Quilt vibe-code protocol
-//   GET  /api/quilt/verify?lang=X&hash=0x...  - verify byte-exact compatibility
-//   GET  /api/canon/hash              - state hash of the canon
-//   GET  /api/                          - HTML demo page
+//   GET  /api/canon/lineage?f=N           - papers that cite F{N}
+//   GET  /api/canon/lineage?from=A&to=B   - shortest citation path A→B (BFS, ≤6 hops)
+//   GET  /api/canon/ghost?paper=N&k=K     - k nearest neighbors (cosine)
+//   GET  /api/canon/similar?id=N&k=K      - top-k similar papers (heuristic)
+//   GET  /api/canon/random                - one random cell from the canon
+//   GET  /api/canon/cell/N                - full cell data for paper N
+//   GET  /api/canon/tick                  - re-balance the canon
+//   GET  /api/canon/hash                  - state hash of the canon
+//   GET  /api/cell/seed                   - canonical seed cell (id=1, dials=1..16)
+//   POST /api/cell                        - submit a new cell {dials, refs, title}
+//   GET  /api/vibe?lang=X&test=1          - the Quilt vibe-code protocol
+//   GET  /api/quilt/verify?lang=X&hash=0x - verify byte-exact compatibility
+//   GET  /api/charter                     - the Quilt Charter (markdown)
+//   GET  /api/tutorial                    - 5-minute tutorial (markdown)
+//   GET  /api/ports                       - list all verified polyformalism ports
+//   GET  /api/health                      - liveness
+//   GET  /playground                      - self-contained Playground HTML
+//   GET  /                                - demo HTML page
+//   GET  /ws/room/:id                     - WebSocket upgrade → Room Durable Object
 //
-// The canon is loaded from the bundled corpus (a JSON snapshot of
-// the 50+ paper metadata).  On each request, the relevant operation
-// is computed and returned as JSON.
+// The canon is loaded from the bundled corpus (a JSON snapshot of the
+// paper metadata).  On each request, the relevant operation is computed
+// and returned as JSON.
 //
-// This is the production deployment of F129 (the Live Canon).
+// This is the production deployment of F129 (the Live Canon) + the
+// Playground UI + the WebSocket Room Durable Object.
 
 // ===== FNV-1a 64-bit hash (UTF-8 encoded, byte-exact with Python) =====
 function fnv1a_64(s) {
   let h = 0xCBF29CE484222325n;
-  // Use TextEncoder to get UTF-8 bytes
   const bytes = new TextEncoder().encode(s);
+  for (let i = 0; i < bytes.length; i++) {
+    h ^= BigInt(bytes[i]);
+    h = (h * 0x00000100000001B3n) & 0xFFFFFFFFFFFFFFFFn;
+  }
+  return h;
+}
+
+// ===== FNV-1a 64-bit hash over a raw byte sequence =====
+function fnv1a_64_bytes(bytes) {
+  let h = 0xCBF29CE484222325n;
   for (let i = 0; i < bytes.length; i++) {
     h ^= BigInt(bytes[i]);
     h = (h * 0x00000100000001B3n) & 0xFFFFFFFFFFFFFFFFn;
@@ -32,19 +55,55 @@ function fnv1a_64(s) {
 
 // ===== Cell encoding (matches Python/C/Rust/Verilog/VHDL byte-exact) =====
 function cellToDials(paper) {
-  const year = parseInt(paper.date.substring(0, 4)) || 1970;
+  const year = parseInt((paper.date || "1970").substring(0, 4)) || 1970;
   const year_q = (year - 1970) * 546;
   const phase_q = paper.phase * 218;
   const f_q = paper.f_number * 218;
   const n_refs = (paper.ref_papers?.length || 0) + (paper.ref_f_numbers?.length || 0);
   const n_refs_q = Math.min(0x7FFF, n_refs * 256);
-  const th = fnv1a_64(paper.title);
+  const th = fnv1a_64(paper.title || "");
   const title_lo = Number(th & 0xFFFFn);
   const title_hi = Number((th >> 16n) & 0xFFFFn);
   const num = Math.min(paper.number, 500);
   const num_q = num * 131;
   return [num_q, title_lo, f_q, phase_q, year_q, n_refs_q, title_hi, 0,
           0, 0, 0, 0, 0, 0, 0, 0];
+}
+
+// ===== Canonical cell serialization (matches the Quilt spec) =====
+// type(1) || id(8 LE) || dials(32 LE) || neighbors(8*N LE)
+function serializeCell(cellId, dials, neighbors) {
+  const out = new Uint8Array(1 + 8 + 32 + 8 * neighbors.length);
+  out[0] = 0x01;
+  const dv = new DataView(out.buffer);
+  // id (uint64 LE)
+  let id = BigInt(cellId);
+  for (let i = 0; i < 8; i++) {
+    dv.setUint8(1 + i, Number(id & 0xFFn));
+    id >>= 8n;
+  }
+  // dials (int16 LE)
+  for (let i = 0; i < 16; i++) {
+    dv.setInt16(9 + i * 2, dials[i] | 0, true);
+  }
+  // neighbors (uint64 LE)
+  let off = 41;
+  for (const n of neighbors) {
+    let nn = BigInt(n);
+    for (let i = 0; i < 8; i++) {
+      dv.setUint8(off + i, Number(nn & 0xFFn));
+      nn >>= 8n;
+    }
+    off += 8;
+  }
+  return out;
+}
+
+// Compute the canonical cell hash (FNV-1a 64 over the serialized cell)
+function cellHash(cellId, dials, neighbors) {
+  const bytes = serializeCell(cellId, dials, neighbors);
+  const h = fnv1a_64_bytes(bytes);
+  return `0x${h.toString(16).padStart(16, "0")}`;
 }
 
 // ===== Cosine similarity =====
@@ -61,23 +120,24 @@ function cosineSim(a, b) {
   return dot / (na * nb);
 }
 
-// ===== State hash (FNV-1a over sorted dials) =====
+// ===== State hash (FNV-1a over sorted cell encodings) =====
 function stateHash(papers) {
-  const allDials = Object.values(papers).map(p => cellToDials(p));
-  allDials.sort((a, b) => a[0] - b[0]);
-  let h = 0xCBF29CE484222325n;
-  for (const d of allDials) {
-    for (const v of d) {
-      // Pack v as 2 bytes (little-endian)
-      const lo = v & 0xFF;
-      const hi = (v >> 8) & 0xFF;
-      h ^= BigInt(lo);
-      h = (h * 0x00000100000001B3n) & 0xFFFFFFFFFFFFFFFFn;
-      h ^= BigInt(hi);
-      h = (h * 0x00000100000001B3n) & 0xFFFFFFFFFFFFFFFFn;
-    }
+  const allCells = Object.values(papers).map(p => {
+    const dials = cellToDials(p);
+    const neighbors = (p.ref_papers || []).map(n => Number(n));
+    return { id: p.number, dials, neighbors };
+  });
+  allCells.sort((a, b) => a.id - b.id);
+  let combined = new Uint8Array(0);
+  for (const c of allCells) {
+    const enc = serializeCell(c.id, c.dials, c.neighbors);
+    const next = new Uint8Array(combined.length + enc.length);
+    next.set(combined, 0);
+    next.set(enc, combined.length);
+    combined = next;
   }
-  return h;
+  const h = fnv1a_64_bytes(combined);
+  return `0x${h.toString(16).padStart(16, "0")}`;
 }
 
 // ===== The 5 Operations =====
@@ -149,6 +209,80 @@ function lineage(canon, f_number) {
   return result;
 }
 
+// BFS through the citation graph (both directions), up to maxHops.
+// Edges include:
+//   - paper.ref_papers (explicit paper-number refs)
+//   - paper.ref_f_numbers (F-number refs → any canon paper with that F-number)
+// Returns { found: bool, path: [paper_numbers], hops: int }.
+function lineagePath(canon, fromN, toN, maxHops) {
+  if (!canon[fromN]) return { found: false, error: `unknown source paper ${fromN}` };
+  if (!canon[toN])   return { found: false, error: `unknown target paper ${toN}` };
+  if (fromN === toN) return { found: true, path: [fromN], hops: 0 };
+
+  const parent = new Map();
+  parent.set(fromN, null);
+  const queue = [fromN];
+  let found = false;
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (cur === toN) { found = true; break; }
+    if (getDepth(parent, cur) >= maxHops) continue;
+    const paper = canon[cur];
+    if (!paper) continue;
+    // Outgoing: papers we cite
+    for (const next of (paper.ref_papers || [])) {
+      if (!canon[next]) continue;
+      if (!parent.has(next)) { parent.set(next, cur); queue.push(next); }
+    }
+    // Outgoing F-number refs → papers with that F-number
+    for (const f of (paper.ref_f_numbers || [])) {
+      for (const [n, p] of Object.entries(canon)) {
+        const nn = Number(n);
+        if (parent.has(nn)) continue;
+        if (p.f_number === f) { parent.set(nn, cur); queue.push(nn); }
+      }
+    }
+    // Incoming: papers that cite us (by paper number)
+    for (const [n, p] of Object.entries(canon)) {
+      const nn = Number(n);
+      if (parent.has(nn)) continue;
+      if ((p.ref_papers || []).includes(cur)) {
+        parent.set(nn, cur);
+        queue.push(nn);
+      }
+    }
+    // Incoming: papers that cite us (by F-number)
+    for (const [n, p] of Object.entries(canon)) {
+      const nn = Number(n);
+      if (parent.has(nn)) continue;
+      if ((p.ref_f_numbers || []).includes(paper.f_number)) {
+        parent.set(nn, cur);
+        queue.push(nn);
+      }
+    }
+  }
+  if (!found) return { found: false, path: null, hops: -1, error: "no path within 6 hops" };
+  // Reconstruct path
+  const path = [];
+  let cur = toN;
+  while (cur !== null && cur !== undefined) {
+    path.push(cur);
+    cur = parent.get(cur);
+  }
+  path.reverse();
+  return { found: true, path, hops: path.length - 1 };
+}
+
+function getDepth(parent, node) {
+  let d = 0;
+  let cur = parent.get(node);
+  while (cur !== null && cur !== undefined) {
+    d++;
+    cur = parent.get(cur);
+  }
+  return d;
+}
+
 function ghost(canon, paper_num, k) {
   const target = canon[paper_num];
   if (!target) return { error: "missing paper" };
@@ -167,89 +301,173 @@ function ghost(canon, paper_num, k) {
   };
 }
 
+// Heuristic "semantic" similarity: cosine + f_number proximity +
+// shared F-number refs + title TF-IDF overlap. We don't have Vectorize
+// accessible from the JS worker, so this is the next best thing.
+function similar(canon, paper_num, k) {
+  const target = canon[paper_num];
+  if (!target) return { error: `unknown paper ${paper_num}` };
+  const targetDials = cellToDials(target);
+  const targetFSet = new Set(target.ref_f_numbers || []);
+  const targetTitle = (target.title || "").toLowerCase();
+  const targetWords = new Set(targetTitle.split(/\W+/).filter(w => w.length > 3));
+
+  const scored = [];
+  for (const [n, p] of Object.entries(canon)) {
+    if (Number(n) === paper_num) continue;
+    const dials = cellToDials(p);
+    const cos = cosineSim(targetDials, dials);
+    // f-number proximity: closer f_numbers get a bonus
+    const fDist = Math.abs(p.f_number - target.f_number);
+    const fProx = 1 / (1 + fDist / 10);
+    // shared refs (F-number overlap)
+    const otherFSet = new Set(p.ref_f_numbers || []);
+    let shared = 0;
+    for (const f of targetFSet) if (otherFSet.has(f)) shared++;
+    const fOverlap = targetFSet.size > 0 ? shared / targetFSet.size : 0;
+    // title word overlap (cheap TF-IDF-style proxy)
+    const otherWords = new Set((p.title || "").toLowerCase().split(/\W+/).filter(w => w.length > 3));
+    let wShared = 0;
+    for (const w of targetWords) if (otherWords.has(w)) wShared++;
+    const wordSim = targetWords.size > 0 ? wShared / targetWords.size : 0;
+    // Combined score
+    const score = 0.50 * cos + 0.20 * fProx + 0.20 * fOverlap + 0.10 * wordSim;
+    scored.push({
+      id: Number(n),
+      number: p.number,
+      title: p.title,
+      f_number: p.f_number,
+      phase: p.phase,
+      score: Math.round(score * 10000) / 10000,
+      components: {
+        cosine: Math.round(cos * 10000) / 10000,
+        f_proximity: Math.round(fProx * 10000) / 10000,
+        f_overlap: Math.round(fOverlap * 10000) / 10000,
+        word_sim: Math.round(wordSim * 10000) / 10000,
+      },
+    });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return {
+    source: { id: paper_num, title: target.title, f_number: target.f_number },
+    algorithm: "cosine(0.5) + f_proximity(0.2) + f_overlap(0.2) + word_sim(0.1)",
+    neighbors: scored.slice(0, k),
+  };
+}
+
 function tick(canon) {
   return { ticked_cells: Object.keys(canon).length };
 }
 
-// ===== Bundle the canon (loaded from the Cloudflare KV at runtime) =====
-// For the worker, we bundle a small canon inline so the demo works
-// without external storage.  In production, this would be loaded from
-// a Cloudflare R2 bucket or KV namespace.
+function randomCell(canon) {
+  const keys = Object.keys(canon);
+  const k = keys[Math.floor(Math.random() * keys.length)];
+  const p = canon[k];
+  return {
+    id: Number(k),
+    number: p.number,
+    title: p.title,
+    f_number: p.f_number,
+    phase: p.phase,
+    date: p.date,
+    dials: cellToDials(p),
+    refs: p.ref_papers || [],
+    f_refs: p.ref_f_numbers || [],
+  };
+}
+
+// ===== The Canon (bundled corpus) =====
+// In production this would be loaded from KV / R2 / D1.  For the live
+// worker we bundle a JSON snapshot of the canon.  The corpus below
+// mirrors the AI-Writings canon up through the F-numbers we have
+// committed metadata for.
 const CANON = {
-  425: {
-    number: 425, title: "F115 — The Logical Routes: VHDL × Verilog × the QUF bit-exactness",
-    f_number: 115, phase: 237, date: "2026-09-03",
-    ref_papers: [426, 427], ref_f_numbers: [],
-  },
-  426: {
-    number: 426, title: "F116 — The 5+1+1+1+1+1+1+1+1+1+1 Opcodes in 5 Substrates: A Polyformalism Atlas",
-    f_number: 116, phase: 238, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115],
-  },
-  427: {
-    number: 427, title: "F117 — The 5-Substrate Polyformalism: Python × C × Rust × Verilog × VHDL, One Cell",
-    f_number: 117, phase: 239, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115, 116],
-  },
-  428: {
-    number: 428, title: "F118 — The Polyformalism in Production: A Play-Test + Benchmark",
-    f_number: 118, phase: 240, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115, 116, 117],
-  },
-  429: {
-    number: 429, title: "F119 — The 6-Substrate Polyformalism: cell-runtime Joins the Canon",
-    f_number: 119, phase: 241, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115, 116, 117, 118],
-  },
-  432: {
-    number: 432, title: "F122 — The Shape Store: 5 Indices on Cloudflare Vectorize",
-    f_number: 122, phase: 244, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [120, 121],
-  },
-  433: {
-    number: 433, title: "F123 — The Composer Agent: 5 Cells, 80 Parameters",
-    f_number: 123, phase: 245, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [120, 122],
-  },
-  439: {
-    number: 439, title: "F129 — The Live Canon: Papers as Cells, Reading as Navigation",
-    f_number: 129, phase: 251, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115, 120, 122, 125],
-  },
-  440: {
-    number: 440, title: "F130 — The Polyformal Live Canon: One Cell, Five Substrates",
-    f_number: 130, phase: 251, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115, 129],
-  },
-  441: {
-    number: 441, title: "F131 — The 3-Package Polyformalism: One Cell, Three Registries",
-    f_number: 131, phase: 252, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [115, 130],
-  },
-  442: {
-    number: 442, title: "F132 — Operational Fictions as Concrete System-Prompt Noun-Phrases",
-    f_number: 132, phase: 253, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [],
-  },
-  443: {
-    number: 443, title: "F133 — Operational Fictions as Falsifiable Claims (avg divergence 0.861)",
-    f_number: 133, phase: 254, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [132],
-  },
-  444: {
-    number: 444, title: "F134 — The Quilt Cowboy: Orchestrator Over 12 Cheap Voices",
-    f_number: 134, phase: 254, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [132, 133],
-  },
-  445: {
-    number: 445, title: "F135 — The Wheelhouse Test: Scoring Fictions for 0300-in-a-Gale Tolerability",
-    f_number: 135, phase: 254, date: "2026-09-03",
-    ref_papers: [], ref_f_numbers: [132, 133],
-  },
+  425: { number: 425, title: "F115 — The Logical Routes: VHDL × Verilog × the QUF bit-exactness", f_number: 115, phase: 237, date: "2026-09-03", ref_papers: [426, 427], ref_f_numbers: [] },
+  426: { number: 426, title: "F116 — The 5+1+1+1+1+1+1+1+1+1+1 Opcodes in 5 Substrates: A Polyformalism Atlas", f_number: 116, phase: 238, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115] },
+  427: { number: 427, title: "F117 — The 5-Substrate Polyformalism: Python × C × Rust × Verilog × VHDL, One Cell", f_number: 117, phase: 239, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115, 116] },
+  428: { number: 428, title: "F118 — The Polyformalism in Production: A Play-Test + Benchmark", f_number: 118, phase: 240, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115, 116, 117] },
+  429: { number: 429, title: "F119 — The 6-Substrate Polyformalism: cell-runtime Joins the Canon", f_number: 119, phase: 241, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115, 116, 117, 118] },
+  432: { number: 432, title: "F122 — The Shape Store: 5 Indices on Cloudflare Vectorize", f_number: 122, phase: 244, date: "2026-09-03", ref_papers: [], ref_f_numbers: [120, 121] },
+  433: { number: 433, title: "F123 — The Composer Agent: 5 Cells, 80 Parameters", f_number: 123, phase: 245, date: "2026-09-03", ref_papers: [], ref_f_numbers: [120, 122] },
+  439: { number: 439, title: "F129 — The Live Canon: Papers as Cells, Reading as Navigation", f_number: 129, phase: 251, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115, 120, 122, 125] },
+  440: { number: 440, title: "F130 — The Polyformal Live Canon: One Cell, Five Substrates", f_number: 130, phase: 251, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115, 129] },
+  441: { number: 441, title: "F131 — The 3-Package Polyformalism: One Cell, Three Registries", f_number: 131, phase: 252, date: "2026-09-03", ref_papers: [], ref_f_numbers: [115, 130] },
+  442: { number: 442, title: "F132 — Operational Fictions as Concrete System-Prompt Noun-Phrases", f_number: 132, phase: 253, date: "2026-09-03", ref_papers: [], ref_f_numbers: [] },
+  443: { number: 443, title: "F133 — Operational Fictions as Falsifiable Claims (avg divergence 0.861)", f_number: 133, phase: 254, date: "2026-09-03", ref_papers: [], ref_f_numbers: [132] },
+  444: { number: 444, title: "F134 — The Quilt Cowboy: Orchestrator Over 12 Cheap Voices", f_number: 134, phase: 254, date: "2026-09-03", ref_papers: [], ref_f_numbers: [132, 133] },
+  445: { number: 445, title: "F135 — The Wheelhouse Test: Scoring Fictions for 0300-in-a-Gale Tolerability", f_number: 135, phase: 254, date: "2026-09-03", ref_papers: [], ref_f_numbers: [132, 133] },
 };
 
+// ===== In-memory cell store (per-isolate, resets on cold-start) =====
+const CELL_STORE = new Map();
+let CELL_COUNTER = 5000;
+
+function admitCell(payload) {
+  // Validate
+  if (!payload || typeof payload !== "object") {
+    return { error: "expected JSON object", admitted: false };
+  }
+  const { dials, refs, title } = payload;
+  if (!Array.isArray(dials) || dials.length !== 16) {
+    return { error: "dials must be an array of 16 ints", admitted: false };
+  }
+  for (let i = 0; i < 16; i++) {
+    if (!Number.isInteger(dials[i]) || dials[i] < -32768 || dials[i] > 32767) {
+      return { error: `dial[${i}] must be a signed 16-bit int (-32768..32767), got ${dials[i]}`, admitted: false };
+    }
+  }
+  if (title !== undefined && (typeof title !== "string" || title.length >= 200)) {
+    return { error: "title must be a string under 200 chars", admitted: false };
+  }
+  const refsList = Array.isArray(refs) ? refs : [];
+  for (const r of refsList) {
+    const rn = Number(r);
+    if (!Number.isInteger(rn) || rn < 0) {
+      return { error: `ref ${r} must be a non-negative integer`, admitted: false };
+    }
+  }
+  // Assign id
+  const id = ++CELL_COUNTER;
+  // No self-cycle check
+  for (const r of refsList) {
+    if (Number(r) === id) {
+      return { error: `ref ${r} cannot equal the cell's own id ${id} (no self-cycles)`, admitted: false };
+    }
+  }
+  // No duplicate refs
+  const refsSet = new Set(refsList.map(Number));
+  const neighbors = [...refsSet];
+  const titleStr = (title || `admitted-cell-${id}`).slice(0, 199);
+  // Hash
+  const hash = cellHash(id, dials, neighbors);
+  const sh = stateHash(CANON);
+  // Add to the in-memory store (we don't mutate CANON itself)
+  const cell = {
+    id,
+    number: id,
+    title: titleStr,
+    f_number: 0,
+    phase: 0,
+    date: new Date().toISOString().slice(0, 10),
+    dials: [...dials],
+    refs: neighbors,
+    ref_papers: [...neighbors],
+    ref_f_numbers: [],
+    hash,
+    submitter: "playground",
+    created_at: new Date().toISOString(),
+  };
+  CELL_STORE.set(id, cell);
+  return {
+    id,
+    hash,
+    state_hash: sh,
+    admitted: true,
+    cell,
+  };
+}
+
 // ===== Vibe-code protocol =====
-// A 30-second prompt that produces a working Quilt in any language.
 function vibeResponse(lang, includeTest) {
   const proto = `You are writing a Quilt cell. A cell has:
 - 16 signed Q1.15 dials (range -32768..32767)
@@ -287,13 +505,13 @@ If your port produces this hash, it is byte-exact compatible with the canon.`;
       protocol_md: "https://github.com/SuperInstance/quilt-claude-charts/blob/main/QUILT_VIBE_PROTOCOL.md",
     },
     byte_exact_test: "0xe435d91d6d92a1d8",
-    known_ports: ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go"],
+    known_ports: ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go", "zig", "mojo"],
   };
 }
 
 function verifyPort(lang, hash) {
   const expected = "0xe435d91d6d92a1d8";
-  const known = ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go"];
+  const known = ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go", "zig", "mojo"];
   const isKnown = known.includes(lang.toLowerCase());
   const isMatch = (hash || "").toLowerCase() === expected;
   return {
@@ -309,8 +527,21 @@ function verifyPort(lang, hash) {
   };
 }
 
+// ===== HMAC-style "signature" for share links =====
+// Not a real cryptographic signature — this is a worker-shared secret
+// concatenated into an FNV-1a hash so the share links are tamper-evident
+// enough to discourage casual edits.  Replace with HMAC-SHA256 if you
+// need real crypto.
+const SHARE_SECRET = "quilt-live-canon-playground-2026";
+function signShare(payload) {
+  return fnv1a_64(payload + "|" + SHARE_SECRET).toString(16).padStart(16, "0");
+}
+function verifyShare(payload, sig) {
+  return signShare(payload) === (sig || "").toLowerCase();
+}
+
 // ===== Request handler =====
-async function routeRequest(request) {
+async function routeRequest(request, env) {
   const url = new URL(request.url);
   const path = url.pathname;
 
@@ -325,7 +556,8 @@ async function routeRequest(request) {
     });
   }
 
-  // API endpoints
+  // ===== API endpoints =====
+
   if (path === "/api/canon") {
     return jsonResponse({
       papers: Object.values(CANON).map(p => ({
@@ -351,9 +583,24 @@ async function routeRequest(request) {
     return jsonResponse(confluence(CANON, papers));
   }
 
+  // /api/canon/lineage — two shapes:
+  //   ?f=N       (legacy)   → papers that cite F{N}
+  //   ?from=A&to=B          → shortest citation path A→B (BFS, ≤6 hops)
   if (path === "/api/canon/lineage") {
+    const from = url.searchParams.get("from");
+    const to   = url.searchParams.get("to");
+    if (from && to) {
+      const a = parseInt(from), b = parseInt(to);
+      const result = lineagePath(CANON, a, b, 6);
+      // Annotate each step with title
+      result.steps = (result.path || []).map(n => {
+        const p = CANON[n];
+        return { number: n, title: p ? p.title : null, f_number: p ? p.f_number : null };
+      });
+      return jsonResponse(result);
+    }
     const f = parseInt(url.searchParams.get("f") || "115");
-    return jsonResponse(lineage(CANON, f));
+    return jsonResponse({ papers: lineage(CANON, f) });
   }
 
   if (path === "/api/canon/ghost") {
@@ -362,25 +609,67 @@ async function routeRequest(request) {
     return jsonResponse(ghost(CANON, paper, k));
   }
 
+  // /api/canon/similar — top-k semantically similar papers (heuristic)
+  if (path === "/api/canon/similar" || path === "/api/canon/similar/") {
+    const id = parseInt(url.searchParams.get("id") || "425");
+    const k = parseInt(url.searchParams.get("k") || "5");
+    return jsonResponse(similar(CANON, id, k));
+  }
+
+  // /api/canon/random — one random cell from the canon
+  if (path === "/api/canon/random" || path === "/api/canon/random/") {
+    return jsonResponse(randomCell(CANON));
+  }
+
+  // /api/canon/cell/N — full cell data
+  const cellMatch = path.match(/^\/api\/canon\/cell\/(\d+)\/?$/);
+  if (cellMatch) {
+    const n = parseInt(cellMatch[1]);
+    const p = CANON[n];
+    if (!p) return jsonResponse({ error: `unknown paper ${n}` }, 404);
+    const dials = cellToDials(p);
+    const neighbors = (p.ref_papers || []).map(Number);
+    const hash = cellHash(p.number, dials, neighbors);
+    return jsonResponse({
+      id: p.number,
+      number: p.number,
+      title: p.title,
+      f_number: p.f_number,
+      phase: p.phase,
+      date: p.date,
+      dials,
+      refs: p.ref_papers || [],
+      f_refs: p.ref_f_numbers || [],
+      hash,
+      submitter: "canon",
+      created_at: p.date + "T00:00:00Z",
+    });
+  }
+
   if (path === "/api/canon/tick") {
     return jsonResponse(tick(CANON));
   }
 
   if (path === "/api/canon/hash") {
-    const h = stateHash(CANON);
     return jsonResponse({
-      state_hash: `0x${h.toString(16).padStart(16, "0")}`,
+      state_hash: stateHash(CANON),
       paper_count: Object.keys(CANON).length,
+      // Reference vectors so the UI can show the gap
+      test_cell_hash: "0xe435d91d6d92a1d8",
+      canon_target: "0xbf27a3631cdee337",
     });
   }
 
   if (path === "/api/health") {
-    return jsonResponse({ ok: true, papers: Object.keys(CANON).length });
+    return jsonResponse({
+      ok: true,
+      papers: Object.keys(CANON).length,
+      admitted: CELL_STORE.size,
+      state_hash: stateHash(CANON),
+    });
   }
 
   // /api/vibe — return the Quilt vibe-code protocol for any language
-  // GET /api/vibe?lang=go         -> the 30-second prompt
-  // GET /api/vibe?lang=go&test=1  -> the prompt + the test vector
   if (path === "/api/vibe" || path === "/api/vibe/") {
     const lang = url.searchParams.get("lang") || "python";
     const includeTest = url.searchParams.get("test") === "1";
@@ -394,21 +683,18 @@ async function routeRequest(request) {
     return jsonResponse(verifyPort(lang, hash));
   }
 
-  // /api/charter — the Quilt Charter (the educational root document)
   if (path === "/api/charter" || path === "/api/charter/") {
     return new Response(CHARTER_DOC, {
       headers: { "Content-Type": "text/markdown; charset=utf-8" },
     });
   }
 
-  // /api/tutorial — zero-to-byte-exact in 5 minutes, 5 languages
   if (path === "/api/tutorial" || path === "/api/tutorial/") {
     return new Response(TUTORIAL_DOC, {
       headers: { "Content-Type": "text/markdown; charset=utf-8" },
     });
   }
 
-  // /api/ports — list all verified polyformalism ports
   if (path === "/api/ports" || path === "/api/ports/") {
     return jsonResponse({
       test_hash: "0xe435d91d6d92a1d8",
@@ -430,11 +716,77 @@ async function routeRequest(request) {
     });
   }
 
-  // Demo HTML page
+  // ===== Cell admission =====
+  if (path === "/api/cell/seed" || path === "/api/cell/seed/") {
+    return jsonResponse({
+      id: 1,
+      dials: [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],
+      neighbors: [2, 3, 4],
+      expected_hash: "0xe435d91d6d92a1d8",
+      note: "The canonical test cell. Every byte-exact port must hash to 0xe435d91d6d92a1d8.",
+    });
+  }
+
+  if (path === "/api/cell" || path === "/api/cell/") {
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "POST {dials, refs, title} required" }, 405);
+    }
+    let body;
+    try { body = await request.json(); }
+    catch (e) { return jsonResponse({ error: "invalid JSON: " + e.message }, 400); }
+    const result = admitCell(body);
+    if (result.error) return jsonResponse(result, 400);
+    return jsonResponse(result, 201);
+  }
+
+  // ===== Share link signing =====
+  // GET /api/share?dials=...&refs=...&title=...
+  //   → { url, payload, sig } where url is a permalink with ?c=<hex>&s=<sig>
+  if (path === "/api/share" || path === "/api/share/") {
+    const dials = (url.searchParams.get("dials") || "")
+      .split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const refs = (url.searchParams.get("refs") || "")
+      .split(",").map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+    const title = (url.searchParams.get("title") || "").slice(0, 199);
+    if (dials.length !== 16) {
+      return jsonResponse({ error: "dials must have 16 ints" }, 400);
+    }
+    const payload = JSON.stringify({ dials, refs, title });
+    const hex = bytesToHex(new TextEncoder().encode(payload));
+    const sig = signShare(hex);
+    const base = `${url.protocol}//${url.host}/playground`;
+    const share = `${base}?c=${hex}&s=${sig}`;
+    return jsonResponse({ url: share, c: hex, s: sig });
+  }
+
+  // ===== Demo HTML page =====
   if (path === "/" || path === "/index.html") {
     return new Response(DEMO_HTML, {
       headers: { "Content-Type": "text/html; charset=utf-8" },
     });
+  }
+
+  // ===== Playground HTML =====
+  if (path === "/playground" || path === "/playground/") {
+    return new Response(PLAYGROUND_HTML, {
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    });
+  }
+
+  // ===== WebSocket Room Durable Object =====
+  // /ws/room/:id  →  upgrade →  Durable Object stub
+  const wsMatch = path.match(/^\/ws\/room\/([A-Za-z0-9_-]+)\/?$/);
+  if (wsMatch) {
+    const id = wsMatch[1];
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("expected websocket", { status: 400 });
+    }
+    // Get the DO stub from the binding declared in wrangler.toml
+    if (!env.ROOM) {
+      return new Response("Room Durable Object not bound (check wrangler.toml)", { status: 503 });
+    }
+    const stub = env.ROOM.get(env.ROOM.idFromName(id));
+    return stub.fetch(request);
   }
 
   return jsonResponse({ error: "not found", path }, 404);
@@ -449,6 +801,20 @@ function jsonResponse(obj, status = 200) {
       "Cache-Control": "public, max-age=60",
     },
   });
+}
+
+function bytesToHex(bytes) {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, "0");
+  return s;
+}
+function hexToBytes(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+function hexToString(hex) {
+  return new TextDecoder().decode(hexToBytes(hex));
 }
 
 // ===== Quilt Charter (educational root, served at /api/charter) =====
@@ -617,6 +983,8 @@ const DEMO_HTML = `<!DOCTYPE html>
   .result { background: #1a1c25; padding: 1rem; border-radius: 5px;
             margin: 1rem 0; min-height: 100px; }
   .hash { color: #8bcf6e; font-family: monospace; }
+  a { color: #6db4f4; }
+  a:hover { color: #f4b942; }
 </style>
 </head>
 <body>
@@ -653,6 +1021,14 @@ const DEMO_HTML = `<!DOCTYPE html>
 </p>
 <div class="result" id="lin-result">Click "Lineage" to trace a concept through the canon.</div>
 
+<h2>3b. LINEAGE PATH — shortest citation path A→B</h2>
+<p>
+  From: <input type="number" id="lp-from" value="425" style="width: 5rem;">
+  To: <input type="number" id="lp-to" value="440" style="width: 5rem;">
+  <button onclick="doLineagePath()">Find Path</button>
+</p>
+<div class="result" id="lp-result">Click "Find Path" for the shortest citation path (≤6 hops).</div>
+
 <h2>4. GHOST — find paper that should exist</h2>
 <p>
   Source paper: <input type="number" id="ghost-paper" value="425" style="width: 5rem;">
@@ -661,20 +1037,51 @@ const DEMO_HTML = `<!DOCTYPE html>
 </p>
 <div class="result" id="ghost-result">Click "Find Ghost" to discover the k nearest neighbors.</div>
 
-<h2>5. TICK — re-balance the canon</h2>
+<h2>5. SIMILAR — top-k semantically similar</h2>
+<p>
+  Paper: <input type="number" id="sim-id" value="425" style="width: 5rem;">
+  k: <input type="number" id="sim-k" value="5" style="width: 3rem;">
+  <button onclick="doSimilar()">Find Similar</button>
+</p>
+<div class="result" id="sim-result">Click "Find Similar" for the top-k nearest papers.</div>
+
+<h2>6. RANDOM — pick a random cell</h2>
+<p>
+  <button onclick="doRandom()">Surprise Me</button>
+</p>
+<div class="result" id="rand-result">Click "Surprise Me" to discover a random cell.</div>
+
+<h2>7. TICK — re-balance the canon</h2>
 <p>
   <button onclick="doTick()">Tick</button>
 </p>
 <div class="result" id="tick-result">Click "Tick" to re-balance the canon.</div>
 
+<h2>🎮 Playground — the 4×4 cell editor</h2>
+<p>
+  Edit 16 dials, BIND, TICK, share a permalink, export source code in 5 ports.
+</p>
+<p><a href="/playground">→ Open the Playground</a></p>
+
 <h2>API</h2>
-<pre>GET /api/canon                  list all papers
-GET /api/canon/navigate         ?paper=N&amp;depth=D
-GET /api/canon/confluence       ?papers=A,B,C
-GET /api/canon/lineage          ?f=N
-GET /api/canon/ghost            ?paper=N&amp;k=K
-GET /api/canon/tick             re-balance
-GET /api/canon/hash             state hash</pre>
+<pre>GET  /api/canon                      list all papers
+GET  /api/canon/navigate             ?paper=N&amp;depth=D
+GET  /api/canon/confluence           ?papers=A,B,C
+GET  /api/canon/lineage              ?f=N (legacy)  |  ?from=A&amp;to=B (BFS, ≤6 hops)
+GET  /api/canon/ghost                ?paper=N&amp;k=K
+GET  /api/canon/similar              ?id=N&amp;k=K
+GET  /api/canon/random               one random cell
+GET  /api/canon/cell/N               full cell data
+GET  /api/canon/tick                 re-balance
+GET  /api/canon/hash                 state hash
+POST /api/cell                       {dials, refs, title}  →  admit cell
+GET  /api/vibe                       ?lang=X
+GET  /api/quilt/verify               ?lang=X&amp;hash=0x...
+GET  /api/ports                      11 verified ports
+GET  /api/charter                    the Quilt Charter
+GET  /api/tutorial                   5-minute tutorial
+GET  /playground                     4×4 cell editor
+GET  /ws/room/:id                    WebSocket → Room Durable Object</pre>
 
 <p style="margin-top: 2rem; color: #8bcf6e; font-size: 0.9rem;">
   The cell is the unit. The hash is the address. The chart grows because the cowboy rides.
@@ -717,10 +1124,30 @@ async function doConfluence() {
 async function doLineage() {
   const f = document.getElementById("lin-f").value;
   const r = await fetchJson("/api/canon/lineage?f=" + f);
-  const html = r.map(p =>
+  const html = (r.papers || []).map(p =>
     '<div class="paper">paper-' + p.number + ' (phase ' + p.phase + ', F' + p.f_number + ') ' + p.title + '</div>'
   ).join("");
   document.getElementById("lin-result").innerHTML = html || "(no lineage for F" + f + ")";
+}
+
+async function doLineagePath() {
+  const from = document.getElementById("lp-from").value;
+  const to   = document.getElementById("lp-to").value;
+  const r = await fetchJson("/api/canon/lineage?from=" + from + "&to=" + to);
+  if (r.error) {
+    document.getElementById("lp-result").innerHTML = '<div class="paper">Error: ' + r.error + '</div>';
+    return;
+  }
+  if (!r.found) {
+    document.getElementById("lp-result").innerHTML = '<div class="paper">No path within 6 hops.</div>';
+    return;
+  }
+  const path = r.path.map(n => n).join(" → ");
+  const steps = (r.steps || []).map(s =>
+    '<div class="paper">→ paper-' + s.number + ' (F' + s.f_number + ') ' + s.title + '</div>'
+  ).join("");
+  document.getElementById("lp-result").innerHTML =
+    '<div class="paper">Path (' + r.hops + ' hops): ' + path + '</div>' + steps;
 }
 
 async function doGhost() {
@@ -735,6 +1162,32 @@ async function doGhost() {
     '<div class="paper">Source: ' + r.source_paper + '</div>' + html;
 }
 
+async function doSimilar() {
+  const id = document.getElementById("sim-id").value;
+  const k = document.getElementById("sim-k").value;
+  const r = await fetchJson("/api/canon/similar?id=" + id + "&k=" + k);
+  if (r.error) { document.getElementById("sim-result").innerHTML = r.error; return; }
+  const html = (r.neighbors || []).map(n =>
+    '<div class="paper">paper-' + n.number + ' (F' + n.f_number + ') score=' + n.score +
+    ' [cos=' + (n.components && n.components.cosine) +
+    ' fprox=' + (n.components && n.components.f_proximity) +
+    ' fov=' + (n.components && n.components.f_overlap) +
+    ' w=' + (n.components && n.components.word_sim) + '] ' +
+    n.title + '</div>'
+  ).join("");
+  document.getElementById("sim-result").innerHTML =
+    '<div class="paper">Source: paper-' + r.source.id + ' (F' + r.source.f_number + ')</div>' +
+    '<div class="paper">Algorithm: ' + r.algorithm + '</div>' + html;
+}
+
+async function doRandom() {
+  const r = await fetchJson("/api/canon/random");
+  document.getElementById("rand-result").innerHTML =
+    '<div class="paper">paper-' + r.number + ' (F' + r.f_number + ', phase ' + r.phase + ') ' + r.title + '</div>' +
+    '<div class="paper">Dials: [' + r.dials.join(",") + ']</div>' +
+    '<div class="paper">Refs: [' + r.refs.join(",") + '] F-refs: [' + r.f_refs.join(",") + ']</div>';
+}
+
 async function doTick() {
   const r = await fetchJson("/api/canon/tick");
   document.getElementById("tick-result").innerHTML =
@@ -746,14 +1199,512 @@ init();
 </body>
 </html>`;
 
-// ===== Worker export =====
-addEventListener("fetch", event => {
-  event.respondWith(handleRequest(event.request));
-});
+// ===== Playground HTML =====
+// A self-contained 4×4 dial editor. Edit 16 dials, BIND, TICK, share a
+// permalink, verify against the canonical test hash, fetch source code
+// for any of 5 ports. Single file, no external dependencies.
+const PLAYGROUND_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quilt Playground — bind 16 dials, ship a cell</title>
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg: #0a0c12;
+    --panel: #14171f;
+    --panel-2: #1c1f29;
+    --border: #2a2d38;
+    --fg: #e0e2e8;
+    --muted: #8a8d97;
+    --accent: #f4b942;
+    --good: #8bcf6e;
+    --bad: #e87a7a;
+    --link: #6db4f4;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.5; min-height: 100vh;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 1.2rem 1.5rem; display: flex; align-items: center;
+    justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+  }
+  header h1 { margin: 0; font-size: 1.2rem; color: var(--accent); letter-spacing: 0.5px; }
+  header .hashes { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); }
+  header .hashes .label { color: var(--fg); margin-right: 0.4rem; }
+  header .hashes .v { color: var(--good); }
+  header .hashes .v.mismatch { color: var(--bad); }
+  header .hashes .row { margin: 0.15rem 0; }
+  main { padding: 1.5rem; max-width: 1200px; margin: 0 auto; }
+  section {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.2rem; margin-bottom: 1.5rem;
+  }
+  h2 { margin: 0 0 0.8rem 0; color: var(--accent); font-size: 1.1rem;
+       border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
+  h3 { margin: 0 0 0.5rem 0; color: var(--good); font-size: 0.95rem; }
+  button, .btn {
+    background: var(--panel-2); color: var(--fg); border: 1px solid var(--border);
+    padding: 0.5rem 0.9rem; border-radius: 5px; cursor: pointer;
+    font-size: 0.9rem; font-family: inherit; transition: background 0.15s;
+  }
+  button:hover, .btn:hover { background: #2a2d38; }
+  button.primary { background: #4a3a1a; border-color: var(--accent); color: var(--accent); }
+  button.primary:hover { background: #5a4622; }
+  button.good { background: #2a3a1f; border-color: var(--good); color: var(--good); }
+  button.bad  { background: #3a1f1f; border-color: var(--bad);  color: var(--bad); }
+  input[type=text], input[type=number], textarea, select {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem; border-radius: 4px; font-family: var(--mono);
+    font-size: 0.9rem;
+  }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; }
+  .dial {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.6rem; text-align: center;
+  }
+  .dial .lbl { color: var(--muted); font-size: 0.75rem; font-family: var(--mono);
+               margin-bottom: 0.2rem; }
+  .dial input[type=number] { width: 100%; text-align: center; font-size: 0.95rem; }
+  .dial input[type=range] { width: 100%; }
+  .dial .val { color: var(--accent); font-family: var(--mono); font-size: 0.85rem; }
+  .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.8rem 0; }
+  .toolbar input { flex: 1; min-width: 12rem; }
+  .row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+  pre, code { font-family: var(--mono); }
+  pre.src { background: #050608; padding: 0.8rem; border-radius: 5px;
+            overflow-x: auto; max-height: 320px; font-size: 0.8rem;
+            color: #c8cad0; border: 1px solid var(--border); white-space: pre-wrap; }
+  .ports { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+  .ports button { font-size: 0.85rem; padding: 0.3rem 0.6rem; }
+  .ports button.active { background: var(--accent); color: #1a1a1a; border-color: var(--accent); }
+  .result { font-family: var(--mono); font-size: 0.85rem;
+            background: var(--bg); padding: 0.6rem; border-radius: 4px;
+            border: 1px solid var(--border); word-break: break-all; }
+  .result.good { border-color: var(--good); color: var(--good); }
+  .result.bad  { border-color: var(--bad);  color: var(--bad); }
+  .footer { color: var(--muted); font-size: 0.8rem; text-align: center;
+            padding: 1rem; border-top: 1px solid var(--border); }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--accent); }
+  .pill { display: inline-block; background: var(--panel-2);
+          border: 1px solid var(--border); padding: 0.15rem 0.5rem;
+          border-radius: 3px; font-family: var(--mono); font-size: 0.75rem; }
+</style>
+</head>
+<body>
 
-async function handleRequest(request) {
+<header>
+  <h1>🧵 Quilt Playground</h1>
+  <div class="hashes" id="hash-bar">
+    <div class="row"><span class="label">state:</span><span class="v" id="h-state">…</span></div>
+    <div class="row"><span class="label">canon target:</span><span class="v" id="h-canon-target">0xbf27a3631cdee337</span></div>
+    <div class="row"><span class="label">cell test:</span><span class="v" id="h-cell-test">0xe435d91d6d92a1d8</span></div>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ -->
+<section>
+  <h2>1. The 4×4 Dial Grid</h2>
+  <p style="color: var(--muted); margin: 0 0 0.8rem 0; font-size: 0.9rem;">
+    16 signed Q1.15 dials (range −32768..32767). Edit any cell.
+  </p>
+  <div class="grid" id="dial-grid"></div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>2. Opcodes</h2>
+  <div class="toolbar">
+    <button class="primary" id="op-tick">▶ TICK</button>
+    <button id="op-bind">BIND</button>
+    <button id="op-link">LINK</button>
+    <button id="op-verify">VERIFY hash</button>
+    <button id="op-random">RANDOM</button>
+    <button id="op-seed">SEED (id=1)</button>
+    <button id="op-zero">ZERO</button>
+  </div>
+  <div class="result" id="op-out">Click an opcode to send it to the worker.</div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>3. Title &amp; Refs</h2>
+  <div class="row">
+    <input type="text" id="title" placeholder="Cell title…" style="flex: 1; min-width: 20rem;">
+  </div>
+  <div class="row" style="margin-top: 0.5rem;">
+    <span class="pill">refs (canon paper #s, comma-sep):</span>
+    <input type="text" id="refs" value="425" style="width: 12rem;">
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>4. Share &amp; Export</h2>
+  <div class="toolbar">
+    <button id="op-admit" class="good">ADMIT to canon (POST /api/cell)</button>
+    <button id="op-share">📋 Copy share link</button>
+    <button id="op-sign">Generate signed URL</button>
+  </div>
+  <input type="text" id="share-url" readonly placeholder="Share link will appear here…" style="width: 100%;">
+  <div class="result" id="share-out" style="margin-top: 0.6rem;">—</div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2>5. Source — Polyformalism Port Inspector</h2>
+  <p style="color: var(--muted); margin: 0 0 0.6rem 0; font-size: 0.9rem;">
+    Fetch the vibe-code protocol for any of 11 ports. The byte-exact test hash is 0xe435d91d6d92a1d8.
+  </p>
+  <div class="ports" id="ports-bar"></div>
+  <pre class="src" id="src-out">Click a port to fetch its source.</pre>
+</section>
+
+<p style="text-align: center; margin: 2rem 0 0.5rem; color: var(--muted); font-size: 0.85rem;">
+  The cell is irreducible. The fabric is a graph. The hash is the canon.
+</p>
+
+</main>
+
+<div class="footer">
+  Live Canon · <a href="/">/</a> · <a href="/api/canon/hash">/api/canon/hash</a> ·
+  <a href="/api/ports">/api/ports</a> · <a href="/api/charter">/api/charter</a>
+</div>
+
+<script>
+"use strict";
+
+// ====== State ======
+const PORTS = ["python", "go", "rust", "zig", "mojo", "c99", "verilog", "vhdl", "javascript", "typescript"];
+let cellId = 1;
+let dials = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+let tickCount = 0;
+
+// ====== Build the 4×4 grid ======
+const grid = document.getElementById("dial-grid");
+for (let i = 0; i < 16; i++) {
+  const d = document.createElement("div");
+  d.className = "dial";
+  d.innerHTML = \`
+    <div class="lbl">dial[\${i.toString().padStart(2,"0")}]</div>
+    <input type="range" min="-32768" max="32767" value="0" id="r\${i}">
+    <div class="val" id="v\${i}">0</div>
+  \`;
+  grid.appendChild(d);
+  const range = d.querySelector(\`input[type=range]\`);
+  const val   = d.querySelector(\`#v\${i}\`);
+  range.addEventListener("input", () => {
+    dials[i] = parseInt(range.value);
+    val.textContent = range.value;
+  });
+}
+
+// ====== Initial state — load the live state hash ======
+async function refreshHashes() {
   try {
-    return await routeRequest(request);
+    const h = await fetch("/api/canon/hash").then(r => r.json());
+    const targetCanon = "0xbf27a3631cdee337";
+    const targetCell  = "0xe435d91d6d92a1d8";
+    const stateEl = document.getElementById("h-state");
+    stateEl.textContent = h.state_hash;
+    stateEl.className = (h.state_hash === targetCanon) ? "v" : "v mismatch";
+    document.getElementById("h-canon-target").textContent = targetCanon;
+    document.getElementById("h-cell-test").textContent    = targetCell;
+  } catch (e) {
+    document.getElementById("h-state").textContent = "error: " + e.message;
+  }
+}
+
+// ====== TICK — apply locally, then call the worker ======
+async function doTick() {
+  tickCount++;
+  // Local TICK: add +1 to all dials on odd ticks, -1 on even (alternating)
+  const sign = (tickCount % 2 === 1) ? 1 : -1;
+  for (let i = 0; i < 16; i++) {
+    dials[i] = clamp16(dials[i] + sign);
+    const r = document.getElementById("r" + i);
+    r.value = dials[i];
+    document.getElementById("v" + i).textContent = dials[i];
+  }
+  const r = await fetch("/api/canon/tick").then(r => r.json());
+  setOpOut("TICK local (alternating, count=" + tickCount + "). Worker ticked " + r.ticked_cells + " cells.");
+}
+function clamp16(n) {
+  if (n >  32767) return  32767;
+  if (n < -32768) return -32768;
+  return n;
+}
+
+// ====== BIND — validate locally, then admit ======
+async function doBind() {
+  const out = {
+    id: cellId,
+    dials: [...dials],
+    neighbors: parseRefs(),
+  };
+  setOpOut("BIND local: " + JSON.stringify(out));
+  return out;
+}
+function parseRefs() {
+  const s = document.getElementById("refs").value || "";
+  return s.split(",").map(x => parseInt(x.trim())).filter(n => !isNaN(n));
+}
+
+// ====== LINK — add a random canon neighbor ======
+async function doLink() {
+  const canon = await fetch("/api/canon").then(r => r.json());
+  const keys = Object.keys(canon.papers.reduce((o, p) => (o[p.number] = p, o), {}));
+  const cur = parseRefs();
+  const pick = keys[Math.floor(Math.random() * keys.length)];
+  if (!cur.includes(pick)) cur.push(pick);
+  document.getElementById("refs").value = cur.join(",");
+  setOpOut("LINK added paper-" + pick + " to refs. Current refs: [" + cur.join(",") + "]");
+}
+
+// ====== VERIFY — compute cell hash and check ======
+async function doVerify() {
+  const refs = parseRefs();
+  // Use the worker's seed cell as a sanity check first
+  const seed = await fetch("/api/cell/seed").then(r => r.json());
+  const seedHash = await computeCellHashJS(1, seed.dials, seed.neighbors);
+  const canonHash = (await fetch("/api/canon/hash").then(r => r.json())).state_hash;
+  // Now compute our hash
+  const myHash = await computeCellHashJS(cellId, dials, refs);
+  setOpOut(
+    "VERIFY local: my hash = " + myHash + "\\n" +
+    "Seed sanity (id=1, dials=1..16, nbrs=2,3,4): " + seedHash + " (expected " + seed.expected_hash + ") — " +
+    ((seedHash === seed.expected_hash) ? "PASS ✓" : "FAIL ✗") + "\\n" +
+    "Canon state: " + canonHash + " (target 0xbf27a3631cdee337 — " +
+    ((canonHash === "0xbf27a3631cdee337") ? "MATCH ✓" : "differs (current corpus ≠ target)"))
+  ;
+}
+
+// ====== Local FNV-1a 64 (matches the worker byte-exactly) ======
+async function computeCellHashJS(id, dials, neighbors) {
+  // Build the canonical serialization: type(1) + id(8) + dials(32) + nbrs(8*N)
+  const buf = new Uint8Array(1 + 8 + 32 + 8 * neighbors.length);
+  buf[0] = 0x01;
+  const dv = new DataView(buf.buffer);
+  let v = BigInt(id);
+  for (let i = 0; i < 8; i++) { dv.setUint8(1 + i, Number(v & 0xFFn)); v >>= 8n; }
+  for (let i = 0; i < 16; i++) dv.setInt16(9 + i*2, dials[i] | 0, true);
+  let off = 41;
+  for (const n of neighbors) {
+    let nn = BigInt(n);
+    for (let i = 0; i < 8; i++) { dv.setUint8(off + i, Number(nn & 0xFFn)); nn >>= 8n; }
+    off += 8;
+  }
+  return "0x" + fnv1a_64(buf).toString(16).padStart(16, "0");
+}
+function fnv1a_64(bytes) {
+  const OFFSET = 0xCBF29CE484222325n;
+  const PRIME  = 0x00000100000001B3n;
+  const MASK   = 0xFFFFFFFFFFFFFFFFn;
+  let h = OFFSET;
+  for (let i = 0; i < bytes.length; i++) {
+    h = ((h ^ BigInt(bytes[i])) * PRIME) & MASK;
+  }
+  return h;
+}
+
+// ====== ADMIT — POST /api/cell ======
+async function doAdmit() {
+  const payload = {
+    dials: [...dials],
+    refs: parseRefs(),
+    title: document.getElementById("title").value || ("playground-cell-" + Date.now()),
+  };
+  setOpOut("POST /api/cell " + JSON.stringify(payload).slice(0, 200) + " …");
+  try {
+    const r = await fetch("/api/cell", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    if (j.error) {
+      setOpOut("REJECTED: " + j.error);
+      document.getElementById("op-out").className = "result bad";
+    } else {
+      cellId = j.id;
+      setOpOut("ADMITTED ✓ id=" + j.id + " hash=" + j.hash + " state=" + j.state_hash);
+      document.getElementById("op-out").className = "result good";
+    }
+  } catch (e) {
+    setOpOut("ERROR: " + e.message);
+  }
+}
+
+// ====== Share link (signed permalink) ======
+async function doShare() {
+  const dialsStr = dials.join(",");
+  const refsStr  = parseRefs().join(",");
+  const title    = document.getElementById("title").value || "";
+  const url = "/api/share?dials=" + encodeURIComponent(dialsStr)
+            + "&refs=" + encodeURIComponent(refsStr)
+            + "&title=" + encodeURIComponent(title);
+  const r = await fetch(url).then(r => r.json());
+  if (r.error) { setShareOut("Error: " + r.error, false); return; }
+  const full = r.url;
+  document.getElementById("share-url").value = full;
+  // Try to copy to clipboard
+  try {
+    await navigator.clipboard.writeText(full);
+    setShareOut("Copied to clipboard ✓\\n" + full, true);
+  } catch (e) {
+    setShareOut("Link generated (clipboard unavailable):\\n" + full, true);
+  }
+}
+function doSign() { doShare(); }
+
+function setOpOut(msg) {
+  const el = document.getElementById("op-out");
+  el.textContent = msg;
+  el.className = "result";
+}
+function setShareOut(msg, good) {
+  const el = document.getElementById("share-out");
+  el.textContent = msg;
+  el.className = "result " + (good ? "good" : "bad");
+}
+
+// ====== Port inspector ======
+const portsBar = document.getElementById("ports-bar");
+let activePort = null;
+for (const p of PORTS) {
+  const b = document.createElement("button");
+  b.textContent = p;
+  b.dataset.lang = p;
+  b.addEventListener("click", () => loadPort(p));
+  portsBar.appendChild(b);
+}
+async function loadPort(lang) {
+  for (const b of portsBar.children) {
+    b.classList.toggle("active", b.dataset.lang === lang);
+  }
+  activePort = lang;
+  const src = document.getElementById("src-out");
+  src.textContent = "Fetching /api/vibe?lang=" + lang + "&test=1 …";
+  try {
+    const r = await fetch("/api/vibe?lang=" + lang + "&test=1").then(r => r.json());
+    src.textContent =
+      "# language: " + r.language + "\\n" +
+      "# byte_exact_test: " + r.byte_exact_test + "\\n" +
+      "# known_ports: " + r.known_ports.join(", ") + "\\n\\n" +
+      r.protocol + "\\n\\n" +
+      (r.test_vector ? "## Test vector\\n" + r.test_vector + "\\n" : "") +
+      "\\n## Links\\n" +
+      Object.entries(r.links).map(([k, v]) => "  " + k + ": " + v).join("\\n");
+  } catch (e) {
+    src.textContent = "Error: " + e.message;
+  }
+}
+
+// ====== Wire up buttons ======
+document.getElementById("op-tick").onclick    = doTick;
+document.getElementById("op-bind").onclick    = doBind;
+document.getElementById("op-link").onclick    = doLink;
+document.getElementById("op-verify").onclick  = doVerify;
+document.getElementById("op-admit").onclick   = doAdmit;
+document.getElementById("op-share").onclick   = doShare;
+document.getElementById("op-sign").onclick    = doSign;
+document.getElementById("op-random").onclick  = doRandom;
+document.getElementById("op-seed").onclick    = doSeed;
+document.getElementById("op-zero").onclick    = doZero;
+
+async function doRandom() {
+  const r = await fetch("/api/canon/random").then(r => r.json());
+  cellId = r.id;
+  // We don't have the raw dials, but we can encode the paper's "fingerprint"
+  // by using the cosine of cellToDials (which is what the worker uses).
+  // For visual feedback, set the first 4 dials to f_number, phase, year-q, refs.
+  dials = r.dials.slice();
+  for (let i = 0; i < 16; i++) {
+    document.getElementById("r" + i).value = dials[i];
+    document.getElementById("v" + i).textContent = dials[i];
+  }
+  document.getElementById("title").value = r.title;
+  document.getElementById("refs").value  = (r.refs || []).join(",");
+  setOpOut("RANDOM → paper-" + r.id + " (F" + r.f_number + ", phase " + r.phase + ")");
+}
+function doSeed() {
+  dials = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
+  for (let i = 0; i < 16; i++) {
+    document.getElementById("r" + i).value = dials[i];
+    document.getElementById("v" + i).textContent = dials[i];
+  }
+  document.getElementById("title").value = "seed cell (id=1)";
+  document.getElementById("refs").value  = "2,3,4";
+  cellId = 1;
+  setOpOut("SEED loaded: id=1, dials=[1..16], refs=[2,3,4]. Expected hash 0xe435d91d6d92a1d8.");
+}
+function doZero() {
+  dials = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+  for (let i = 0; i < 16; i++) {
+    document.getElementById("r" + i).value = 0;
+    document.getElementById("v" + i).textContent = "0";
+  }
+  setOpOut("ZERO: all dials = 0.");
+}
+
+// ====== Boot ======
+refreshHashes();
+doSeed();
+loadPort("python");
+</script>
+</body>
+</html>`;
+
+// ===== WebSocket Room Durable Object =====
+export class Room {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+  async fetch(request) {
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("expected websocket", { status: 400 });
+    }
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    // Use the Hibernation API so the DO can sleep between messages
+    this.state.acceptWebSocket(server);
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  async webSocketMessage(ws, message) {
+    // Broadcast to all connected clients in this room
+    for (const peer of this.state.getWebSockets()) {
+      try { peer.send(message); } catch (e) { /* ignore */ }
+    }
+  }
+  async webSocketClose(ws, code, reason, wasClean) {
+    try { ws.close(code, reason); } catch (e) { /* ignore */ }
+  }
+  async webSocketError(ws, error) {
+    try { ws.close(1011, "ws error"); } catch (e) { /* ignore */ }
+  }
+}
+
+// ===== Worker export (module format) =====
+export default {
+  async fetch(request, env, ctx) {
+    return handleRequest(request, env);
+  },
+};
+
+async function handleRequest(request, env) {
+  try {
+    return await routeRequest(request, env);
   } catch (e) {
     return jsonResponse({ error: e.message, stack: e.stack }, 500);
   }

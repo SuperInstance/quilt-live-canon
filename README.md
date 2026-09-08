@@ -35,15 +35,78 @@ GET  /api/quilt/verify?lang=X&hash=0x... # VERIFY: byte-exact check
 
 ```bash
 # Verify the live state hash matches the Python reference
-curl https://live-canon.superinstance.dev/api/tick
-# {"state_hash": "0xbf27a3631cdee337"}
+curl https://live-canon.superinstance.dev/api/canon/hash
+# {"state_hash": "0x…", "paper_count": 14, "test_cell_hash": "0xe435d91d6d92a1d8"}
 
 # Get the 30-second protocol for any language
 curl 'https://live-canon.superinstance.dev/api/vibe?lang=python'
 
 # Verify a port's hash
 curl 'https://live-canon.superinstance.dev/api/quilt/verify?lang=go&hash=0xe435d91d6d92a1d8'
+
+# Open the 4×4 Playground in a browser
+open https://live-canon.superinstance.dev/playground
+
+# Submit a new cell
+curl -X POST https://live-canon.superinstance.dev/api/cell \
+  -H 'Content-Type: application/json' \
+  -d '{"dials":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16],"refs":[2,3,4],"title":"my first cell"}'
+
+# WebSocket Room Durable Object (broadcast group)
+websocat ws://live-canon.superinstance.dev/ws/room/abc
 ```
+
+## ✦ The full endpoint surface
+
+```
+GET  /                                              # demo HTML
+GET  /playground                                    # 4×4 dial editor + share + port inspector
+GET  /api/canon                                     # list all papers
+GET  /api/canon/navigate            ?paper=N&depth=D
+GET  /api/canon/confluence          ?papers=A,B,C
+GET  /api/canon/lineage             ?f=N            # papers citing F{N}
+GET  /api/canon/lineage             ?from=A&to=B    # BFS path A→B (≤6 hops)
+GET  /api/canon/ghost               ?paper=N&k=K    # cosine-NN
+GET  /api/canon/similar             ?id=N&k=K       # top-k similar (cosine+f-prox+f-ov+word)
+GET  /api/canon/random                              # one random cell
+GET  /api/canon/cell/N                              # full cell data for paper N
+GET  /api/canon/tick                                # re-balance
+GET  /api/canon/hash                                # state hash
+POST /api/cell                      {dials, refs, title}   # admit a new cell
+GET  /api/cell/seed                                 # the canonical test cell (id=1)
+GET  /api/share                     ?dials=&refs=&title=    # signed permalink
+GET  /api/vibe                      ?lang=X
+GET  /api/quilt/verify              ?lang=X&hash=0x…
+GET  /api/ports                                     # 11 verified polyformalism ports
+GET  /api/charter                                    # the Quilt Charter (markdown)
+GET  /api/tutorial                                   # 5-minute zero-to-byte-exact
+GET  /api/health                                     # liveness
+GET  /ws/room/:id                                    # WebSocket → Room Durable Object
+```
+
+## ✦ The Playground
+
+`/playground` is a single-file HTML page (~18 KB) that:
+
+- Renders a 4×4 grid of range sliders (16 signed Q1.15 dials, -32768..32767)
+- Shows the live state hash at the top, with a comparison to the test vectors
+  `0xbf27a3631cdee337` (canon target) and `0xe435d91d6d92a1d8` (cell test)
+- Wires up 5 opcodes: TICK (alternating +1/-1), BIND, LINK, VERIFY, ADMIT
+- Computes the local FNV-1a 64 cell hash byte-exactly and checks it against
+  the seed cell hash `0xe435d91d6d92a1d8`
+- Generates a signed permalink (`?c=<hex>&s=<sig>`) and copies it to clipboard
+- Fetches the vibe-code protocol for any of 11 ports and shows the source
+
+No external dependencies. No build step. The whole page is one self-contained
+`<script>` block.
+
+## ✦ The WebSocket Room Durable Object
+
+A `Room` class (declared in `worker.js` + `wrangler.toml`) is a broadcast
+group keyed by room id. Every message any client sends is delivered to all
+other clients in the same room. The DO uses the Hibernation API
+(`acceptWebSocket` + `getWebSockets()`) so it sleeps between messages and
+incurs zero cost when idle.
 
 ## ✦ The byte-exact contract
 

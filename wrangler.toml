@@ -1,0 +1,37 @@
+# wrangler.toml — Live Canon (Cloudflare Worker)
+#
+# Worker name: live-canon
+# Routes: live-canon.superinstance.dev/*
+# Custom domain routes to THIS worker (not quilt-live-canon).
+#
+# Deploy with one of:
+#   npx wrangler deploy                    # uses OAuth login
+#   curl -X PUT -H "Authorization: Bearer $CLOUDFLARE_TOKEN" \
+#     -H "Content-Type: application/javascript" \
+#     --data-binary @worker.js \
+#     "https://api.cloudflare.com/client/v4/accounts/$ACCT_ID/workers/scripts/live-canon"
+#
+# For the second form, durable_object bindings cannot be added via the
+# scripts API alone — you must either:
+#   (a) run `wrangler deploy` once to set up the binding, then continue
+#       using the curl script API for subsequent worker.js updates, OR
+#   (b) call the Durable Objects PUT API directly to set the binding, OR
+#   (c) use `wrangler deploy` (recommended).
+#
+# See: https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "live-canon"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# The Room Durable Object — one named instance per room-id.
+# Each room is a broadcast group: clients connect via /ws/room/:id,
+# every message any client sends is broadcast to all other clients.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+# Apply the migration that creates the Room class.
+[[migrations]]
+tag = "v1"
+new_classes = ["Room"]
