@@ -488,13 +488,13 @@ If your port produces this hash, it is byte-exact compatible with the canon.`;
       protocol_md: "https://github.com/SuperInstance/quilt-claude-charts/blob/main/QUILT_VIBE_PROTOCOL.md",
     },
     byte_exact_test: "0xe435d91d6d92a1d8",
-    known_ports: ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go", "zig", "mojo"],
+    known_ports: ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go", "zig", "mojo", "forth", "haskell", "lua", "j"],
   };
 }
 
 function verifyPort(lang, hash) {
   const expected = "0xe435d91d6d92a1d8";
-  const known = ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go", "zig", "mojo"];
+  const known = ["python", "c99", "rust", "verilog", "vhdl", "javascript", "typescript", "go", "zig", "mojo", "forth", "haskell", "lua", "j"];
   const isKnown = known.includes(lang.toLowerCase());
   const isMatch = (hash || "").toLowerCase() === expected;
   return {
@@ -710,9 +710,13 @@ async function routeRequest(request, env) {
         { lang: "go", repo: "quilt-go", tests: "7/7", level: "imperative" },
         { lang: "zig", repo: "quilt-zig", tests: "7/7", level: "systems" },
         { lang: "mojo", repo: "quilt-mojo", tests: "ref", level: "type-safe" },
+        { lang: "forth", repo: "quilt-forth", tests: "ref", level: "concatenative" },
+        { lang: "haskell", repo: "quilt-haskell", tests: "ref", level: "functional" },
+        { lang: "lua", repo: "quilt-lua", tests: "ref", level: "scripting" },
+        { lang: "j", repo: "quilt-j", tests: "ref", level: "array" },
       ],
-      sigma: 4,
-      n_ports: 11,
+      sigma: 5,
+      n_ports: 14,
     });
   }
 
@@ -821,6 +825,52 @@ async function routeRequest(request, env) {
       ],
       cell_id: 9900,
       usage: "POST /api/sensor  body: { source, value, ts? }"
+    });
+  }
+
+  // ===== /api/voices — 11-voice writers' room =====
+  if (path === "/api/voices" || path === "/api/voices/") {
+    return jsonResponse({
+      room_size: 11,
+      providers: 5,
+      voices: [
+        { provider: "DeepSeek",      model: "deepseek-chat",                              label: "DeepSeek",   role: "synthesis-anchor" },
+        { provider: "DeepInfra",     model: "meta-llama/Llama-3.3-70B-Instruct",          label: "Llama70B",   role: "long-detailed" },
+        { provider: "DeepInfra",     model: "mistralai/Mistral-Small-24B-Instruct-2501",  label: "Mistral",    role: "cowboy-voice" },
+        { provider: "DeepInfra",     model: "meta-llama/Llama-4-Scout-17B-16E-Instruct",  label: "Llama4Scout", role: "big-context" },
+        { provider: "DeepInfra",     model: "Qwen/Qwen3-Next-80B-A3B-Instruct",            label: "Qwen3Next",  role: "big-moe" },
+        { provider: "Cloudflare",    model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast",    label: "CF-Llama70B", role: "free-tier" },
+        { provider: "Cloudflare",    model: "@cf/meta/llama-4-scout-17b-16e-instruct",     label: "CF-Scout",    role: "free-tier" },
+        { provider: "Cloudflare",    model: "@cf/mistralai/mistral-small-3.1-24b-instruct",label: "CF-Mistral",  role: "free-tier" },
+        { provider: "Cloudflare",    model: "@cf/qwen/qwen2.5-coder-32b-instruct",         label: "CF-QwenCoder", role: "code-focused" },
+        { provider: "Z.AI coding",   model: "glm-4.5-flash",                               label: "ZAI-flash",   role: "reasoning-fast" },
+        { provider: "Z.AI coding",   model: "glm-4.5",                                     label: "ZAI-4.5",     role: "slow-but-deep" },
+        { provider: "Z.AI coding",   model: "glm-4.6",                                     label: "ZAI-4.6",     role: "slow-but-deep" },
+        { provider: "DeepInfra",     model: "moonshotai/Kimi-K2.7-Code",                   label: "Kimi",        role: "code-focused" },
+        { provider: "DeepInfra",     model: "moonshotai/Kimi-K2-Instruct",                 label: "Kimi-K2",     role: "code-focused" },
+        { provider: "Gemini",        model: "gemini-2.5-flash",                            label: "Gemini",      role: "rate-limited" },
+      ],
+      mode: "adversarial",
+      pattern: "Voice A affirms (this IS a cell) + Voice B negates (this is NOT a cell, it is X) + DeepSeek synthesizes contradiction resolution",
+      canon_state: { "rate_per_day": "~500 papers", "sigma": 5 },
+    });
+  }
+
+  // ===== /api/frontiers — all drained + running frontiers =====
+  if (path === "/api/frontiers" || path === "/api/frontiers/") {
+    return jsonResponse({
+      drained_today: [
+        "aviation", "space", "marine", "computing", "weather", "cooking",
+        "music", "mind", "psychology", "chess", "jazz", "biology", "money",
+        "physics", "relationships", "geography", "literature", "dance",
+        "ai", "philosophy", "medicine", "garden", "tools", "textiles",
+        "weather2", "business", "architecture", "mythology", "cars", "dreams",
+        "oceans", "film", "history", "cities", "chemistry",
+      ],
+      total_papers_today: 500,
+      total_canon: 1100,
+      frontier_format: "the X — a cell that is also Y",
+      pattern: "10-30 topics per frontier, 1-2 papers/min aggregate rate when daemons run in parallel",
     });
   }
 
