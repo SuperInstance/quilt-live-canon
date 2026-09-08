@@ -604,10 +604,27 @@ async function routeRequest(request, env) {
     return jsonResponse(randomCell(CANON));
   }
 
+  // /api/boat/9900 — get the live boat cell from the in-memory store
+  const boatMatch = path.match(/^\/api\/boat\/(\d+)\/?$/);
+  if (boatMatch) {
+    const n = parseInt(boatMatch[1]);
+    const live = CELL_STORE.get(n);
+    if (!live) {
+      return jsonResponse({ error: `no live cell ${n} yet — POST /api/sensor first` }, 404);
+    }
+    return jsonResponse({ ...live, hash: cellHash(live.id, live.dials, live.refs) });
+  }
+
   // /api/canon/cell/N — full cell data
   const cellMatch = path.match(/^\/api\/canon\/cell\/(\d+)\/?$/);
   if (cellMatch) {
     const n = parseInt(cellMatch[1]);
+    // 1. Admitted (live) cells take precedence
+    const live = CELL_STORE.get(n);
+    if (live) {
+      return jsonResponse({ ...live, hash: cellHash(live.id, live.dials, live.refs) });
+    }
+    // 2. Bundled canon
     const p = CANON[n];
     if (!p) return jsonResponse({ error: `unknown paper ${n}` }, 404);
     const dials = cellToDials(p);
@@ -740,6 +757,71 @@ async function routeRequest(request, env) {
     const base = `${url.protocol}//${url.host}/playground`;
     const share = `${base}?c=${hex}&s=${sig}`;
     return jsonResponse({ url: share, c: hex, s: sig });
+  }
+
+  // ===== Sensor API — boat pushes sensor readings =====
+  // POST /api/sensor  body: { source: "depth-transducer", value: 12.4, ts: 1694150400 }
+  //   → updates a cell, returns { cell, new_dial, state_hash, ts }
+  if (path === "/api/sensor" || path === "/api/sensor/") {
+    if (request.method !== "POST") {
+      return jsonResponse({ error: "POST required" }, 405);
+    }
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.source !== "string" || typeof body.value !== "number") {
+      return jsonResponse({ error: "expected { source, value, ts? }" }, 400);
+    }
+    // Synthetic sensor mapping: each source maps to a fixed dial index in cell 9900
+    const SENSOR_MAP = {
+      "depth-transducer":    { cell: 9900, dial: 0, scale: 1640, q_max: 32767 },
+      "wind-apparent":       { cell: 9900, dial: 1, scale: 800,  q_max: 32767 },
+      "wind-true":           { cell: 9900, dial: 2, scale: 800,  q_max: 32767 },
+      "engine-rpm":          { cell: 9900, dial: 3, scale: 8,    q_max: 32767 },
+      "battery-voltage":     { cell: 9900, dial: 4, scale: 2200, q_max: 32767 },
+      "battery-current":     { cell: 9900, dial: 5, scale: 800,  q_max: 32767 },
+      "battery-soc":         { cell: 9900, dial: 6, scale: 327,  q_max: 32767 },
+      "outside-temperature":  { cell: 9900, dial: 7, scale: 100,  q_max: 32767 },
+      "speed-sog":           { cell: 9900, dial: 8, scale: 2400, q_max: 32767 },
+      "heading-true":        { cell: 9900, dial: 9, scale: 90,   q_max: 32767 },
+      "ais-targets":         { cell: 9900, dial: 10, scale: 1,   q_max: 32767 },
+      "rudder-angle":        { cell: 9900, dial: 11, scale: 360, q_max: 32767 },
+      "fuel-rate":           { cell: 9900, dial: 12, scale: 400, q_max: 32767 },
+      "latitude":            { cell: 9900, dial: 13, scale: 5000, q_max: 32767 },
+      "longitude":           { cell: 9900, dial: 14, scale: 5000, q_max: 32767 },
+      "heartbeat":           { cell: 9900, dial: 15, scale: 1,   q_max: 32767 },
+    };
+    const cfg = SENSOR_MAP[body.source];
+    if (!cfg) {
+      return jsonResponse({ error: `unknown sensor: ${body.source}`, known: Object.keys(SENSOR_MAP) }, 400);
+    }
+    const ts = body.ts || Date.now();
+    const dial = Math.min(cfg.q_max, Math.max(0, Math.round(body.value * cfg.scale + (body.offset || 0))));
+    // Update the cell in CELL_STORE
+    let cell = CELL_STORE.get(cfg.cell) || {
+      id: cfg.cell, number: cfg.cell, title: "boat cell", dials: new Array(16).fill(0), refs: [], f_number: 0, phase: 0, date: "2026-09-08", f_refs: []
+    };
+    cell.dials[cfg.dial] = dial;
+    cell.last_sensor = { source: body.source, value: body.value, dial, ts };
+    CELL_STORE.set(cfg.cell, cell);
+    return jsonResponse({
+      cell: cfg.cell, new_dial: dial, source: body.source, ts,
+      dials: cell.dials,
+      state_hash: "0x" + Array.from(CELL_STORE.values()).map(c => c.dials.join(',')).join('|').split('').reduce((a,b)=>(a*33+b.charCodeAt(0))>>>0,0).toString(16),
+      last_sensor: cell.last_sensor
+    });
+  }
+
+  // ===== Frontend: list known sensors =====
+  if (path === "/api/sensors" || path === "/api/sensors/") {
+    return jsonResponse({
+      sensors: [
+        "depth-transducer", "wind-apparent", "wind-true", "engine-rpm",
+        "battery-voltage", "battery-current", "battery-soc", "outside-temperature",
+        "speed-sog", "heading-true", "ais-targets", "rudder-angle",
+        "fuel-rate", "latitude", "longitude", "heartbeat"
+      ],
+      cell_id: 9900,
+      usage: "POST /api/sensor  body: { source, value, ts? }"
+    });
   }
 
   // ===== Demo HTML page =====
