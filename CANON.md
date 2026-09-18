@@ -6,7 +6,7 @@ state: active
 family: canon
 vessel: unattributed
 born_from: []
-feeds: []
+feeds: [live-canon-npm, live-canon-pypi, live-canon-gh]
 owed_by: [AI-Writings]
 canonical_docs: [README.md]
 ledger: git-log
