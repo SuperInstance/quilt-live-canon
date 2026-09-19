@@ -1,0 +1,39 @@
+{
+  "canon": "1",
+  "name": "quilt-live-canon",
+  "mission": "The Live Canon — reads AI-Writings as a navigable cell fabric of 71 papers, exposed as a Cloudflare Worker with a canonical state hash.",
+  "state": "active",
+  "family": "infrastructure",
+  "vessel": "CCC",
+  "born_from": [
+    "quilt",
+    "AI-Writings"
+  ],
+  "feeds": [
+    "canon-graph",
+    "canon-claim",
+    "quilt-canon-cli"
+  ],
+  "owed_by": [
+    "AI-Writings",
+    "quilt"
+  ],
+  "canonical_docs": [
+    "README.md"
+  ],
+  "ledger": "quilt-wal",
+  "verified": "2026-09-20",
+  "schema": "fleet-canon/1",
+  "generated": "2026-09-20",
+  "generator": "canon-lint --emit-json (CCC)",
+  "agent_facing": {
+    "test_contract": {
+      "cmd": null,
+      "probe": "wrangler"
+    },
+    "key_paths": [],
+    "onboarding": [
+      "CANON_TARGET 0x445185a3a99fd2e7 is the 71-paper canonical state hash — compute, never trust."
+    ]
+  }
+}
