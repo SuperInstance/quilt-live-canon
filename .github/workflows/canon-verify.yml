@@ -6,9 +6,8 @@
 # edit that drifts from the canon target 0x445185a3a99fd2e7 fails THIS
 # check, loud, with the drift line in the log — before it can deploy.
 #
-# The verifier checkout prefers master (the long-term home of the gate)
-# and falls back to the flux-fabric-p1 branch until the gate PRs merge;
-# after they merge the fallback is a no-op and can be deleted.
+# The verifier checkout prefers master (the long-term home of the gate).
+# No fallback — live_check.py is on master.
 
 name: canon-verify
 
@@ -34,10 +33,8 @@ jobs:
           set -e
           git clone --depth 1 https://github.com/SuperInstance/quilt-canon-cli.git canon-cli
           if [ ! -f canon-cli/flux_verifier/live_check.py ]; then
-            echo "gate not on master yet — falling back to flux-fabric-p1"
-            rm -rf canon-cli
-            git clone --depth 1 --branch flux-fabric-p1 \
-              https://github.com/SuperInstance/quilt-canon-cli.git canon-cli
+            echo "::error::live_check.py missing on master — flux-fabric ref is stale"
+            exit 1
           fi
       - name: verify the candidate corpus against the canon target
         run: python3 canon-cli/flux_verifier/live_check.py worker.js
