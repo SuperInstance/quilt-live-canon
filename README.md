@@ -6,14 +6,16 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0">
   <img src="https://img.shields.io/badge/version-live-brightgreen.svg" alt="live">
   <img src="https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange.svg" alt="CF Workers">
-  <img src="https://img.shields.io/badge/hash-0xbf27a3631cdee337-brightgreen.svg" alt="byte-exact">
+  <img src="https://img.shields.io/badge/hash-0x445185a3a99fd2e7-brightgreen.svg" alt="byte-exact">
 </p>
 
 ## ✦ Why this port exists
 
 A Quilt in a Cloudflare Worker is a Quilt at the edge. The cell model is no longer running on your machine — it's running in 200+ cities worldwide, sub-50ms from any user. The fabric is the network. The state is canonical.
 
-This is the **deployed** port. The byte-exact hash of the live URL is `0xbf27a3631cdee337`, identical to the Python reference. The polyformalism is not just portable; it's *in production*.
+This is the **deployed** port. The byte-exact hash of the live URL is `0x445185a3a99fd2e7` — the full committed corpus (71 papers, F98→F141) under the Quilt canonical serialization. The polyformalism is not just portable; it's *in production*.
+
+> **Drift closure (2026-09-20).** The previous badge value `0xbf27a3631cdee337` was a *stranded target*: it was the FNV-1a over dial-vectors only (the retired v0.2.0 algorithm) across a retired 9-paper bundle. The fleet upgraded the state hash to the canonical serialization (`type‖id‖dials‖neighbors`) but left the target pinned to the retired number. This branch closes the front by convergence: the worker now bundles the full 71-paper committed corpus and its live hash **equals** the target. See the drift-front table below for per-surface status.
 
 ## ✦ The 6+2 opcodes (live)
 
@@ -90,7 +92,7 @@ GET  /ws/room/:id                                    # WebSocket → Room Durabl
 
 - Renders a 4×4 grid of range sliders (16 signed Q1.15 dials, -32768..32767)
 - Shows the live state hash at the top, with a comparison to the test vectors
-  `0xbf27a3631cdee337` (canon target) and `0xe435d91d6d92a1d8` (cell test)
+  `0x445185a3a99fd2e7` (canon target) and `0xe435d91d6d92a1d8` (cell test)
 - Wires up 5 opcodes: TICK (alternating +1/-1), BIND, LINK, VERIFY, ADMIT
 - Computes the local FNV-1a 64 cell hash byte-exactly and checks it against
   the seed cell hash `0xe435d91d6d92a1d8`
@@ -112,13 +114,16 @@ incurs zero cost when idle.
 
 | Substrate | State hash | Status |
 |-----------|------------|--------|
-| Python reference | `0xbf27a3631cdee337` | ✓ |
-| Cloudflare Worker (live) | `0xbf27a3631cdee337` | ✓ live |
-| C99 | `0xbf27a3631cdee337` | ✓ |
-| Rust | `0xbf27a3631cdee337` | ✓ |
-| Verilog | `0xbf27a3631cdee337` | ✓ |
-| VHDL | `0xbf27a3631cdee337` | ✓ |
-| JavaScript | `0xbf27a3631cdee337` | ✓ |
+| Surface | Corpus | State hash | Status |
+|---|---|---|---|
+| Cloudflare Worker (this branch) | 71 papers, canonical serialization | `0x445185a3a99fd2e7` | ✓ **converged** |
+| canon_target (declared) | 71 papers, canonical serialization | `0x445185a3a99fd2e7` | — |
+| Python reference (PyPI `quilt-live-canon`) | 14 papers, canonical serialization | `0x7d8d32cd7f8a9f26` | drift — re-bundle pending |
+| npm `@superinstance/live-canon` | 14 papers, canonical serialization | `0x7d8d32cd7f8a9f26` | drift — re-bundle pending |
+| C99 / Rust / Verilog / VHDL ports | 9–14 papers, port bundles | legacy | drift — re-bundle pending |
+| retired v0.2.0 dial-only target | 9 papers, dial-vectors only | `0xbf27a3631cdee337` | **stranded** — algorithm retired |
+
+The drift front (quilt-floor `canon.mjs`) classifies each surface exactly: `converged`, `drift` (right algorithm, wrong corpus), or `stranded` (wrong algorithm, any corpus). A stranded target is a bug in the target, not in the corpus.
 
 The hash of the *live, deployed, edge-running* canon is byte-exact with the Python reference. The polyformalism is not a research result; it's a production fact.
 
