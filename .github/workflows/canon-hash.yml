@@ -1,0 +1,22 @@
+name: canon-hash
+
+# The drift-closure contract must run somewhere with teeth. This repo had
+# GitGuardian but no CI for the canon gate — the guard only guards if
+# something runs it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  canon-hash:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: drift-closure contract
+        run: node test/canon-hash.test.js
