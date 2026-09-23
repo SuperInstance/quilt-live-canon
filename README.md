@@ -6,14 +6,14 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="Apache-2.0">
   <img src="https://img.shields.io/badge/version-live-brightgreen.svg" alt="live">
   <img src="https://img.shields.io/badge/runtime-Cloudflare%20Workers-orange.svg" alt="CF Workers">
-  <img src="https://img.shields.io/badge/hash-0xbf27a3631cdee337-brightgreen.svg" alt="byte-exact">
+  <img src="https://img.shields.io/badge/hash-0x445185a3a99fd2e7-brightgreen.svg" alt="byte-exact">
 </p>
 
 ## ✦ Why this port exists
 
 A Quilt in a Cloudflare Worker is a Quilt at the edge. The cell model is no longer running on your machine — it's running in 200+ cities worldwide, sub-50ms from any user. The fabric is the network. The state is canonical.
 
-This is the **deployed** port. The byte-exact hash of the live URL is `0xbf27a3631cdee337`, identical to the Python reference. The polyformalism is not just portable; it's *in production*.
+This is the **deployed** port. On 2026-09-23 the embedded corpus was synced to the full 71-paper fleet canon (live-canon-gh master), and the worker-surface state hash was re-derived live: `0x445185a3a99fd2e7` — measured equal to the npm/pypi/gh package target, so all four surfaces hold ONE hash. `test/canon-hash.test.js` guards the contract; if the corpus drifts, the drift front is open.
 
 ## ✦ The 6+2 opcodes (live)
 
@@ -90,7 +90,7 @@ GET  /ws/room/:id                                    # WebSocket → Room Durabl
 
 - Renders a 4×4 grid of range sliders (16 signed Q1.15 dials, -32768..32767)
 - Shows the live state hash at the top, with a comparison to the test vectors
-  `0xbf27a3631cdee337` (canon target) and `0xe435d91d6d92a1d8` (cell test)
+  `0x445185a3a99fd2e7` (canon target) and `0xe435d91d6d92a1d8` (cell test)
 - Wires up 5 opcodes: TICK (alternating +1/-1), BIND, LINK, VERIFY, ADMIT
 - Computes the local FNV-1a 64 cell hash byte-exactly and checks it against
   the seed cell hash `0xe435d91d6d92a1d8`
@@ -112,15 +112,26 @@ incurs zero cost when idle.
 
 | Substrate | State hash | Status |
 |-----------|------------|--------|
-| Python reference | `0xbf27a3631cdee337` | ✓ |
-| Cloudflare Worker (live) | `0xbf27a3631cdee337` | ✓ live |
-| C99 | `0xbf27a3631cdee337` | ✓ |
-| Rust | `0xbf27a3631cdee337` | ✓ |
-| Verilog | `0xbf27a3631cdee337` | ✓ |
-| VHDL | `0xbf27a3631cdee337` | ✓ |
-| JavaScript | `0xbf27a3631cdee337` | ✓ |
+| npm / pypi / gh packages (v0.2.1) | `0x445185a3a99fd2e7` | ✓ merged 2026-09-20 |
+| Cloudflare Worker (this branch) | `0x445185a3a99fd2e7` | ✓ measured (`test/canon-hash.test.js`) |
+| Python reference | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync to 71-corpus |
+| C99 | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
+| Rust | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
+| Verilog | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
+| VHDL | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
+| JavaScript | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
 
-The hash of the *live, deployed, edge-running* canon is byte-exact with the Python reference. The polyformalism is not a research result; it's a production fact.
+**2026-09-23 corpus sync.** The rows above the line hold ONE hash over the full
+71-paper committed corpus. The rows below previously held `0xbf27a3631cdee337` — byte-exact
+across six substrates over the retired 14-paper dial bundle. The polyformalism
+algorithm is deterministic and corpus-agnostic, so re-embedding the 71-corpus
+in each port is *expected* to reproduce `0x445185a3a99fd2e7`; until each port re-derives it
+live, that expectation is not a claim. The stranded target `0xbf27a3631cdee337` is retired
+(see live-canon-gh `test/canon-hash.test.js` for the package-surface gate).
+
+The hash of the *live, deployed, edge-running* canon is byte-exact with the
+package surfaces. The polyformalism is not a research result; it's a production
+fact — and its facts are re-derived, never inherited.
 
 ## ✦ The architecture
 
