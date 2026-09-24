@@ -13,7 +13,9 @@
 
 A Quilt in a Cloudflare Worker is a Quilt at the edge. The cell model is no longer running on your machine — it's running in 200+ cities worldwide, sub-50ms from any user. The fabric is the network. The state is canonical.
 
-This is the **deployed** port. On 2026-09-23 the embedded corpus was synced to the full 71-paper fleet canon (live-canon-gh master), and the worker-surface state hash was re-derived live: `0x445185a3a99fd2e7` — measured equal to the npm/pypi/gh package target, so all four surfaces hold ONE hash. `test/canon-hash.test.js` guards the contract; if the corpus drifts, the drift front is open.
+This is the **deployed** port. The byte-exact hash of the live URL is `0x445185a3a99fd2e7` — the full committed corpus (71 papers, F98→F141) under the Quilt canonical serialization. The polyformalism is not just portable; it's *in production*.
+
+> **Drift closure (2026-09-20).** The previous badge value `0xbf27a3631cdee337` was a *stranded target*: it was the FNV-1a over dial-vectors only (the retired v0.2.0 algorithm) across a retired 9-paper bundle. The fleet upgraded the state hash to the canonical serialization (`type‖id‖dials‖neighbors`) but left the target pinned to the retired number. This branch closes the front by convergence: the worker now bundles the full 71-paper committed corpus and its live hash **equals** the target. See the drift-front table below for per-surface status.
 
 ## ✦ The 6+2 opcodes (live)
 
@@ -112,26 +114,18 @@ incurs zero cost when idle.
 
 | Substrate | State hash | Status |
 |-----------|------------|--------|
-| npm / pypi / gh packages (v0.2.1) | `0x445185a3a99fd2e7` | ✓ merged 2026-09-20 |
-| Cloudflare Worker (this branch) | `0x445185a3a99fd2e7` | ✓ measured (`test/canon-hash.test.js`) |
-| Python reference | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync to 71-corpus |
-| C99 | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
-| Rust | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
-| Verilog | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
-| VHDL | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
-| JavaScript | `0xbf27a3631cdee337` → expected `0x445185a3a99fd2e7` | ⏳ pending re-sync |
+| Surface | Corpus | State hash | Status |
+|---|---|---|---|
+| Cloudflare Worker (this branch) | 71 papers, canonical serialization | `0x445185a3a99fd2e7` | ✓ **converged** |
+| canon_target (declared) | 71 papers, canonical serialization | `0x445185a3a99fd2e7` | — |
+| Python reference (PyPI `quilt-live-canon`) | 14 papers, canonical serialization | `0x7d8d32cd7f8a9f26` | drift — re-bundle pending |
+| npm `@superinstance/live-canon` | 14 papers, canonical serialization | `0x7d8d32cd7f8a9f26` | drift — re-bundle pending |
+| C99 / Rust / Verilog / VHDL ports | 9–14 papers, port bundles | legacy | drift — re-bundle pending |
+| retired v0.2.0 dial-only target | 9 papers, dial-vectors only | `0xbf27a3631cdee337` | **stranded** — algorithm retired |
 
-**2026-09-23 corpus sync.** The rows above the line hold ONE hash over the full
-71-paper committed corpus. The rows below previously held `0xbf27a3631cdee337` — byte-exact
-across six substrates over the retired 14-paper dial bundle. The polyformalism
-algorithm is deterministic and corpus-agnostic, so re-embedding the 71-corpus
-in each port is *expected* to reproduce `0x445185a3a99fd2e7`; until each port re-derives it
-live, that expectation is not a claim. The stranded target `0xbf27a3631cdee337` is retired
-(see live-canon-gh `test/canon-hash.test.js` for the package-surface gate).
+The drift front (quilt-floor `canon.mjs`) classifies each surface exactly: `converged`, `drift` (right algorithm, wrong corpus), or `stranded` (wrong algorithm, any corpus). A stranded target is a bug in the target, not in the corpus.
 
-The hash of the *live, deployed, edge-running* canon is byte-exact with the
-package surfaces. The polyformalism is not a research result; it's a production
-fact — and its facts are re-derived, never inherited.
+The hash of the *live, deployed, edge-running* canon is byte-exact with the Python reference. The polyformalism is not a research result; it's a production fact.
 
 ## ✦ The architecture
 

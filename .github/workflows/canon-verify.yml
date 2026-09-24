@@ -1,0 +1,40 @@
+# canon-verify — the canon's own immune system at the data layer.
+#
+# Every push/PR that touches worker.js (the bundled CANON corpus) is gated
+# by the same sandboxed FLUX fabric verifier the fleet lint gate uses
+# (SuperInstance/quilt-canon-cli, docs/FLUX_CANON_VERIFIER.md). A corpus
+# edit that drifts from the canon target 0x445185a3a99fd2e7 fails THIS
+# check, loud, with the drift line in the log — before it can deploy.
+#
+# The verifier checkout prefers master (the long-term home of the gate).
+# No fallback — live_check.py is on master.
+
+name: canon-verify
+
+on:
+  push:
+    branches: [master, canon-71-full-corpus]
+    paths: ['worker.js', 'test/**', '.github/workflows/canon-verify.yml']
+  pull_request:
+    paths: ['worker.js', 'test/**', '.github/workflows/canon-verify.yml']
+  workflow_dispatch:
+
+jobs:
+  flux-fabric:
+    name: worker.js corpus vs canon target (sandboxed FLUX verify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: checkout the canon gate (public repo, no token needed)
+        run: |
+          set -e
+          git clone --depth 1 https://github.com/SuperInstance/quilt-canon-cli.git canon-cli
+          if [ ! -f canon-cli/flux_verifier/live_check.py ]; then
+            echo "::error::live_check.py missing on master — flux-fabric ref is stale"
+            exit 1
+          fi
+      - name: verify the candidate corpus against the canon target
+        run: python3 canon-cli/flux_verifier/live_check.py worker.js
