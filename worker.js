@@ -1851,6 +1851,16 @@ async function handleRequest(request, env) {
 }
 
 // ===== Service worker entry point =====
-addEventListener("fetch", (event) => {
-  event.respondWith(handleRequest(event.request));
-});
+// Guarded entry point: registers in the Cloudflare worker runtime (where
+// addEventListener exists); skipped under node --test (where it does not).
+if (typeof addEventListener === "function") {
+  addEventListener("fetch", (event) => {
+    event.respondWith(handleRequest(event.request));
+  });
+}
+
+// Node test seam (canon-hash drift gate): the CANON corpus + stateHash must be
+// require-able without the worker runtime.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { stateHash, CANON };
+}
